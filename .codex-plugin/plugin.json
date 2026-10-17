@@ -1,0 +1,14 @@
+{
+  "name": "garmin-coach",
+  "version": "0.1.0",
+  "description": "Adaptive training coach for Garmin watch owners: onboarding, long-term block planning, daily readiness and weekly check-ins against your own baselines, and structured workouts pushed to your Garmin calendar.",
+  "author": { "name": "Joey Sun" },
+  "license": "MIT",
+  "keywords": ["garmin", "fitness", "coaching", "strength", "running", "training-plan"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Garmin Coach",
+    "shortDescription": "Adaptive coach on top of your Garmin data",
+    "defaultPrompt": "Set me up as a new athlete"
+  }
+}

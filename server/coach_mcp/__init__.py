@@ -1,0 +1,1 @@
+"""garmin-coach MCP server."""

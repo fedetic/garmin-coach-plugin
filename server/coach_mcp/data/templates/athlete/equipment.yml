@@ -1,0 +1,19 @@
+# What the athlete can train with. The coach never prescribes anything not
+# listed here without flagging it and offering a substitute.
+setting: TODO            # home_gym | commercial_gym | minimal | bodyweight_only | mixed
+locations: []            # e.g. [home, office gym] - list both if they alternate
+available: []            # free-text items, e.g. "half rack with safety arms", "adjustable bench"
+not_available: []        # explicit gaps help substitution, e.g. "no cables", "no dumbbells"
+cardio: []               # e.g. "road running", "indoor bike trainer", "pool 25m"
+
+# Load rounding for prescriptions (used by round_load / prescribe_load).
+loads:
+  barbell:
+    bar_kg: 20
+    plates_kg: {25: 2, 20: 2, 15: 2, 10: 2, 5: 2, 2.5: 2, 1.25: 2}   # total plate count, not pairs
+  # dumbbell:
+  #   weights_kg: [5, 7.5, 10, 12.5, 15, 17.5, 20, 22.5, 25]
+  # cable:
+  #   min_kg: 5
+  #   max_kg: 90
+  #   step_kg: 5

@@ -1,0 +1,8 @@
+# garmin-coach workspace settings. This file marks the folder as an athlete workspace.
+athlete: ""
+units: kg                 # kg | lb (Garmin payloads are always built in kg)
+timezone: ""
+weekly_checkin_day: Sunday
+daily_checkin: true       # morning readiness check before training days
+git_sync: false          # true = pull at session start, commit+push at session end (private repo!)
+plugin_schema_version: 1

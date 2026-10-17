@@ -1,0 +1,14 @@
+{
+  "name": "garmin-coach",
+  "owner": {
+    "name": "Joey Sun"
+  },
+  "description": "Adaptive training coach for Garmin watch owners.",
+  "plugins": [
+    {
+      "name": "garmin-coach",
+      "source": "./",
+      "description": "Adaptive training coach for Garmin watch owners."
+    }
+  ]
+}

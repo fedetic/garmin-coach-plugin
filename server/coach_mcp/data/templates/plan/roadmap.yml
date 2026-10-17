@@ -1,0 +1,9 @@
+# Long-term plan: goals -> milestones -> blocks. Filled in by the coach-plan skill.
+version: 1
+updated: TODO
+goals: []
+milestones: []
+blocks:
+  list: []
+timeline: {}
+review_process: "each block is reviewed by the relevant specialists before activation (agent_reviews)"

@@ -1,0 +1,20 @@
+{
+  "name": "garmin-coach",
+  "displayName": "Garmin Coach",
+  "version": "0.1.0",
+  "description": "Adaptive training coach for Garmin watch owners: onboarding, long-term block planning, daily readiness and weekly check-ins against your own baselines, and structured workouts pushed to your Garmin calendar.",
+  "author": {
+    "name": "Joey Sun"
+  },
+  "license": "MIT",
+  "keywords": [
+    "garmin",
+    "fitness",
+    "coaching",
+    "strength",
+    "running",
+    "training-plan"
+  ],
+  "repository": "https://github.com/fedetic/garmin-coach-plugin",
+  "homepage": "https://github.com/fedetic/garmin-coach-plugin"
+}

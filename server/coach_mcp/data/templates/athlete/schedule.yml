@@ -1,0 +1,6 @@
+sessions_per_week: TODO
+session_length_min: TODO
+preferred_days: []        # e.g. [Mon, Wed, Fri, Sat], or "flexible"
+unavailable: []           # recurring constraints, e.g. "no training Thu evenings"
+time_of_day: TODO         # morning | lunch | evening | varies
+upcoming: []              # travel, events, races, holidays: [{date: 2026-12-20, note: "travel 1 week"}]
