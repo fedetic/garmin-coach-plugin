@@ -1,12 +1,14 @@
 [project]
 name = "garmin-coach-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "Deterministic tools for the garmin-coach plugin: workspace, athlete database, readiness baselines, strength math, Garmin workout payloads."
 requires-python = ">=3.10"
 dependencies = ["mcp>=1.2,<2", "pyyaml>=6"]
 
 [project.scripts]
 coach-mcp = "coach_mcp.server:main"
+coach-session = "coach_mcp.session:main"
+coach-codex = "coach_mcp.codex:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]

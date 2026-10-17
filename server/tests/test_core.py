@@ -95,3 +95,36 @@ def test_workspace_and_db(tmp_path):
     (root / "athlete/profile.md").write_text("mine")
     workspace.init(str(root))
     assert (root / "athlete/profile.md").read_text() == "mine"
+
+
+def test_codex_install_roundtrip(tmp_path, monkeypatch):
+    import tomllib
+    from coach_mcp import codex
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    monkeypatch.setenv("CODEX_SKILLS_DIR", str(tmp_path / "skills"))
+    (tmp_path / "codex").mkdir()
+    (tmp_path / "codex" / "config.toml").write_text('model = "x"\n')
+    codex.install()
+    codex.install()  # idempotent
+    cfg = tomllib.loads((tmp_path / "codex" / "config.toml").read_text())
+    assert cfg["model"] == "x" and set(cfg["mcp_servers"]) == {"coach", "garmin"}
+    assert (tmp_path / "skills" / "coach-core" / "SKILL.md").exists()
+    codex.uninstall()
+    assert tomllib.loads((tmp_path / "codex" / "config.toml").read_text()) == {"model": "x"}
+    assert not list((tmp_path / "skills").iterdir())
+    assert (codex.PLUGIN_ROOT / "skills" / "coach-core" / "SKILL.md").exists()
+
+
+def test_session_dump_and_restore(tmp_path, monkeypatch, capsys):
+    from coach_mcp import session
+    root, _ = workspace.init(str(tmp_path / "ws"))
+    db.insert(db.connect(root), "checkins", [{"date": "2000-01-01", "kind": "weekly", "status": "ON_TRACK"}])
+    monkeypatch.setenv("CLAUDE_PROJECT_DIR", str(root))
+    monkeypatch.setattr("sys.argv", ["coach-session", "end"])
+    session.main()
+    (root / "data" / "coach.db").unlink()
+    monkeypatch.setattr("sys.argv", ["coach-session", "start"])
+    session.main()
+    out = capsys.readouterr().out
+    assert "rebuilt" in out and "weekly check-in" in out
+    assert db.query(root, "SELECT count(*) n FROM checkins")[0]["n"] == 1

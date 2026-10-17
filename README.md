@@ -1,7 +1,7 @@
 # garmin-coach
 
 An adaptive training coach for Garmin watch owners that runs inside your own
-AI coding agent (Claude Code or OpenAI Codex) on your own subscription.
+AI assistant (Claude Code or OpenAI Codex) on your own subscription.
 
 - **Onboarding**: reads your Garmin history first (activities, lifts, VO2max,
   HRV/sleep baselines), then asks about goals, injuries, schedule, equipment
@@ -20,128 +20,286 @@ AI coding agent (Claude Code or OpenAI Codex) on your own subscription.
 - **Any environment**: commercial gym, home gym, minimal or bodyweight, with
   substitutions and load rounding to the plates or dumbbells you own.
 
-Your data stays in a folder you own (your *workspace*). The plugin holds no
-athlete data.
+Your data stays in a folder on your computer (`~/coach`). The plugin holds
+no athlete data.
 
 > Not medical advice. The Garmin connection uses the unofficial Garmin Connect
 > API ([Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp)); it can
 > break when Garmin changes things.
 
-## Requirements
+## What you need
 
-- [uv](https://docs.astral.sh/uv/) (`curl -LsSf https://astral.sh/uv/install.sh | sh`)
-- Python 3.10+ and git
-- Claude Code or Codex CLI
-- A Garmin Connect account
+- A Garmin watch synced to a **Garmin Connect** account
+- A **Claude Pro or Max** plan (for Claude Code) *or* a ChatGPT plan that
+  includes **Codex**
+- A Mac, Windows 10/11 or Linux computer
 
-Log in to Garmin once (tokens are stored in `~/.garminconnect/` and last
-about 6 months):
+Everything else (git, uv, Python, Claude Code) is installed by the setup command.
 
+## Quick start: one command
+
+**1. Open a terminal**
+
+| Mac | Windows | Linux |
+|---|---|---|
+| Press `Cmd + Space`, type **Terminal**, press Enter | Press the Windows key, type **PowerShell**, press Enter (not "as administrator") | Open your Terminal app |
+
+**2. Paste the command for your computer and press Enter**
+
+Mac / Linux:
 ```sh
-uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
+curl -fsSL https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.sh | bash
 ```
 
-## Install: Claude Code
+Windows (PowerShell):
+```powershell
+irm https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.ps1 | iex
+```
 
+<details>
+<summary>Using Codex instead of Claude Code?</summary>
+
+Install [Codex](https://developers.openai.com/codex/cli) first, then:
+
+```sh
+# Mac / Linux
+curl -fsSL https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.sh | bash -s -- --codex
+```
+```powershell
+# Windows
+$env:COACH_TOOL="codex"; irm https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.ps1 | iex
+```
+</details>
+
+The script walks through 6 steps and skips anything that's already done, so
+it's safe to run again if something fails halfway:
+
+1. **git**: needed to download the Garmin connector (Windows: installed via winget; Mac: the developer-tools popup)
+2. **uv**: runs the coach and Garmin servers, and installs Python by itself
+3. **Claude Code** (or checks that Codex is there)
+4. **The garmin-coach plugin**
+5. **Garmin Connect login**: your email, password and MFA code if you use one. Only a login token is saved, in `~/.garminconnect` on your computer, and it lasts about 6 months.
+6. **Your coaching folder**: `~/coach`
+
+**3. Start coaching**
+
+```sh
+cd ~/coach
+claude          # or: codex
+```
+
+The first time, Claude Code asks you to log in in your browser. Then type:
+
+```
+set me up as a new athlete
+```
+
+## Step-by-step setup (if you prefer, or if the script stops)
+
+Run these in the same terminal. After each install step, **close and reopen
+the terminal** if the next command says "not found" or "not recognized".
+
+<details>
+<summary><b>1. git</b></summary>
+
+| Mac | Windows | Linux (Ubuntu/Debian) |
+|---|---|---|
+| `xcode-select --install` | `winget install --id Git.Git -e` | `sudo apt install git` |
+
+Check: `git --version`
+</details>
+
+<details>
+<summary><b>2. uv</b></summary>
+
+| Mac / Linux | Windows |
+|---|---|
+| `curl -LsSf https://astral.sh/uv/install.sh \| sh` | `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 \| iex"` |
+
+Check: `uv --version`
+</details>
+
+<details>
+<summary><b>3. Claude Code</b> (skip if you use Codex)</summary>
+
+| Mac / Linux | Windows |
+|---|---|
+| `curl -fsSL https://claude.ai/install.sh \| bash` | `irm https://claude.ai/install.ps1 \| iex` |
+
+Check: `claude --version`. More options: [Claude Code setup docs](https://code.claude.com/docs/en/setup).
+</details>
+
+<details>
+<summary><b>4. The plugin</b></summary>
+
+Claude Code (all systems):
 ```sh
 claude plugin marketplace add fedetic/garmin-coach-plugin
 claude plugin install garmin-coach@garmin-coach
 ```
 
-For development, from a clone: `claude --plugin-dir /path/to/garmin-coach-plugin`.
-
-## Install: Codex
-
+Codex:
 ```sh
-git clone https://github.com/fedetic/garmin-coach-plugin.git
-bash garmin-coach-plugin/scripts/install-codex.sh        # --uninstall to remove
+# Mac / Linux
+git clone https://github.com/fedetic/garmin-coach-plugin.git ~/.garmin-coach/plugin
+uv run --project ~/.garmin-coach/plugin/server coach-codex install
 ```
+```powershell
+# Windows
+git clone https://github.com/fedetic/garmin-coach-plugin.git $HOME\.garmin-coach\plugin
+uv run --project $HOME\.garmin-coach\plugin\server coach-codex install
+```
+This links the same skills into `~/.agents/skills` and registers the same
+two servers in `~/.codex/config.toml`. Remove with `... coach-codex uninstall`.
+</details>
 
-This symlinks the same `skills/` into `~/.agents/skills/` and registers the
-same two MCP servers in `~/.codex/config.toml`. A `.codex-plugin/plugin.json`
-and `.agents/plugins/marketplace.json` are also included for Codex's plugin
-system. The script is the tested path.
+<details>
+<summary><b>5. Garmin login</b></summary>
+
+All systems:
+```sh
+uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
+```
+Run it again whenever the coach says the Garmin login has expired.
+</details>
+
+<details>
+<summary><b>6. Coaching folder</b></summary>
+
+| Mac / Linux | Windows |
+|---|---|
+| `mkdir ~/coach && cd ~/coach` | `mkdir ~\coach; cd ~\coach` |
+</details>
 
 ## Use
 
+Always start the coach **from your coaching folder**:
+
 ```sh
-mkdir ~/coach && cd ~/coach
+cd ~/coach
 claude          # or: codex
-> set me up as a new athlete
 ```
 
-Then, from that folder:
+Just talk to it in plain language. These are the main things it does (you
+can also call them directly):
 
-| Say | Skill | Claude Code | Codex |
+| Say | What happens | Claude Code | Codex |
 |---|---|---|---|
-| "set me up" / "my goals changed" | coach-setup | `/garmin-coach:coach-setup` | `$coach-setup` |
-| "morning check" / "should I train today?" | coach-daily | `/garmin-coach:coach-daily` | `$coach-daily` |
-| "weekly check-in" | coach-weekly | `/garmin-coach:coach-weekly` | `$coach-weekly` |
-| "plan my next block" | coach-plan | `/garmin-coach:coach-plan` | `$coach-plan` |
-| "review this block" | coach-review | `/garmin-coach:coach-review` | `$coach-review` |
-| "push this week to Garmin" | coach-garmin-sync | `/garmin-coach:coach-garmin-sync` | `$coach-garmin-sync` |
+| "set me up" / "my goals changed" | onboarding, or updating goals/equipment/schedule | `/garmin-coach:coach-setup` | `$coach-setup` |
+| "morning check" | today's GO / MODIFY / REST | `/garmin-coach:coach-daily` | `$coach-daily` |
+| "weekly check-in" | weekly report + next week on Garmin | `/garmin-coach:coach-weekly` | `$coach-weekly` |
+| "plan my next block" | build or revise the plan | `/garmin-coach:coach-plan` | `$coach-plan` |
+| "review this block" | specialist sign-off | `/garmin-coach:coach-review` | `$coach-review` |
+| "push this week to Garmin" | create and schedule workouts | `/garmin-coach:coach-garmin-sync` | `$coach-garmin-sync` |
 
-Plain language works too: skills trigger from their descriptions.
+### A typical week
+
+```mermaid
+flowchart LR
+    A["Once: set me up"] --> B["Plan + review<br/>(automatic)"] --> C["Week 1 on your<br/>Garmin calendar"]
+    C --> D{"Training day?"}
+    D -- yes --> E["Morning check<br/>GO / MODIFY / REST"] --> F["Train with the<br/>workout on your watch"] --> G["Rate effort on<br/>the watch"]
+    D -- no --> H["Rest - nothing to do"]
+    G --> I["Check-in day:<br/>weekly check-in"]
+    H --> I
+    I --> J["Next week pushed<br/>to Garmin"] --> D
+    I -. "block finished" .-> K["Next block planned<br/>+ reviewed (automatic)"] --> J
+```
+
+| When | You do | The coach does |
+|---|---|---|
+| **Once** | "set me up as a new athlete" (~20-30 min) | reads your Garmin history, asks what it can't see, builds the plan, reviews it, puts week 1 on your Garmin calendar |
+| **Morning of a training day** (~1 min) | "morning check" | compares last night's sleep/HRV/resting HR/Body Battery to *your* normal, says GO / MODIFY / REST, and updates today's workout on Garmin if it changes |
+| **During training** | start today's workout on the watch (it's on your Garmin calendar) and follow the steps | nothing. The watch records sets, reps and weight |
+| **Right after training** | rate the effort on your watch or in Garmin Connect (perceived effort, 1-10), and fix any set the watch mislabeled | uses it at the next check-in. An effort that's never rated can't guide the plan |
+| **Rest days** | nothing (a morning check is optional) | nothing |
+| **Check-in day** (you pick it, e.g. Sunday, ~5-10 min) | "weekly check-in", then answer a few questions (missed sessions, pain, sleep) | weekly report, adjusts the plan only if the data supports it, **pushes next week's workouts to Garmin** |
+| **End of a block** (every ~3-8 weeks) | nothing extra, it happens inside the weekly check-in | plans the next block, runs the specialist review, pushes week 1 |
+
+### When to ask for what
+
+- **New workouts on Garmin?** You normally never ask. The weekly check-in
+  schedules next week, and a morning check updates today if needed. Ask
+  ("push this week to Garmin", "move Thursday's session to Friday") only when
+  your schedule changes or something is missing on the watch.
+- **A review?** It runs automatically before every new block. Ask yourself
+  only after you've changed the plan by hand ("I want to add a run on
+  Wednesdays") or if you'd like a second opinion on a big change. There's no
+  need to request one weekly.
+- **Something changed?** Just say it at any time: "my knee hurts on squats",
+  "I'm travelling next week, hotel gym only", "I can only train 3 days now",
+  "I signed up for a 10k in March". The coach adjusts the plan and the Garmin
+  calendar.
+- **Missed a check-in?** No problem. The next one covers everything since the
+  last one. The coach also reminds you when a check-in is due.
+
+### Using more than one computer
+
+Make `~/coach` a **private** git repository and set `git_sync: true` in
+`~/coach/coach.yml`. The coach pulls at the start of each session and saves
+and pushes at the end. Don't run sessions on two computers at the same time.
+
+## Updating and removing
+
+| | Claude Code | Codex |
+|---|---|---|
+| Update | `claude plugin update garmin-coach@garmin-coach` (or re-run the setup command) | re-run the setup command, or `git -C ~/.garmin-coach/plugin pull` |
+| Remove | `claude plugin uninstall garmin-coach@garmin-coach` | `uv run --project ~/.garmin-coach/plugin/server coach-codex uninstall` |
+
+Removing the plugin never touches your `~/coach` folder.
 
 ## How it's built (and why it ports 1:1)
 
 ```
 garmin-coach-plugin/
-├── skills/                    # Agent Skills standard (SKILL.md: name + description), read by both tools
-│   ├── coach-core/            # operating manual + references/ + goals/ (loaded by every other skill)
+├── skills/                  # Agent Skills standard (SKILL.md), read by both Claude Code and Codex
+│   ├── coach-core/          # operating manual + references/ + goals/ (loaded by every other skill)
 │   ├── coach-setup/ coach-daily/ coach-weekly/ coach-plan/ coach-review/ coach-garmin-sync/
-├── server/                    # coach MCP server (Python, stdio): the deterministic half
-├── hooks/hooks.json           # SessionStart/SessionEnd: status line + optional git sync
-├── scripts/session.sh         # hook implementation
-├── scripts/install-codex.sh   # Codex install
-├── .mcp.json                  # MCP servers (coach + garmin) for Claude Code
-├── .claude-plugin/            # Claude Code manifest + marketplace
-├── .codex-plugin/             # Codex manifest
-└── .agents/plugins/           # Codex marketplace
+├── server/                  # coach MCP server (Python): the deterministic half
+│   └── coach_mcp/           #   server.py (tools), session.py (hooks), codex.py (Codex installer)
+├── hooks/hooks.json         # session start/end: status line + optional git sync
+├── scripts/setup.sh, setup.ps1   # one-command setup
+├── .mcp.json                # MCP servers (coach + garmin) for Claude Code
+├── .claude-plugin/          # Claude Code manifest + marketplace
+├── .codex-plugin/           # Codex manifest
+└── .agents/plugins/         # Codex marketplace
 ```
 
 Portability rules:
-- Only the parts both tools support go in the core: skills, stdio MCP
-  servers, hooks. No Claude-only subagents or slash-command files. The
-  specialist roles are reasoning perspectives described in a skill
-  reference, not separate agents.
-- Skills reference each other by relative path (`../coach-core/...`), so they
-  work wherever the skill folders sit side by side.
+- Only the parts both tools support go in the core: skills, MCP servers and
+  hooks. No Claude-only subagents or slash-command files; the specialist
+  roles are reasoning perspectives in a skill reference.
+- Skills reference each other by relative path (`../coach-core/...`).
+- Everything runs through `uv` and Python: no bash or `python3` dependency,
+  so it works the same on Windows.
 - Anything that should give the same answer every time is an MCP tool, not a
   prompt: readiness baselines, e1RM/%1RM, load rounding, Garmin workout
-  payloads, validated logging. This also makes the server reusable as the
-  backend of a future app.
+  payloads, validated logging. This makes the server reusable as the backend
+  of a future app.
 
-### Coach MCP tools
+Coach MCP tools: `workspace_status` · `init_workspace` · `query` · `log` ·
+`update_record` · `upsert_training_block` · `record_metrics` ·
+`readiness_report` · `estimate_1rm` · `prescribe_load` · `round_load` ·
+`find_garmin_exercise` · `build_strength_workout` · `register_garmin_workout`
+· `import_activity` · `training_summary` · `goal_progress`
 
-`workspace_status` · `init_workspace` · `query` · `log` · `update_record` ·
-`upsert_training_block` · `record_metrics` · `readiness_report` ·
-`estimate_1rm` · `prescribe_load` · `round_load` · `find_garmin_exercise` ·
-`build_strength_workout` · `register_garmin_workout` · `import_activity` ·
-`training_summary` · `goal_progress`
-
-### Workspace layout
+Workspace layout:
 
 ```
 ~/coach/
-├── coach.yml                  # settings (units, check-in day, git_sync)
-├── AGENTS.md, CLAUDE.md       # always-loaded pointer + your standing rules
-├── athlete/                   # profile.md, equipment.yml, schedule.yml, nutrition.md
-├── plan/                      # roadmap.yml, blocks/block-NN-*.yml
-├── data/coach.db              # sqlite (coach.sql text dump is what git syncs)
-└── journal/context.md         # session handover
+├── coach.yml                # settings (units, check-in day, git_sync)
+├── AGENTS.md, CLAUDE.md     # always-loaded pointer + your standing rules
+├── athlete/                 # profile.md, equipment.yml, schedule.yml, nutrition.md
+├── plan/                    # roadmap.yml, blocks/block-NN-*.yml
+├── data/coach.db            # sqlite (coach.sql text dump is what git syncs)
+└── journal/context.md       # session handover
 ```
-
-Multiple devices: make the workspace a **private** git repo and set
-`git_sync: true`. The session hooks pull at start and commit/push at end.
-Only the text dump is committed, so there are no binary merge conflicts.
-In Codex (where the installer doesn't set up hooks), run
-`bash <plugin>/scripts/session.sh start|end` yourself, or add it to your
-Codex hooks.
 
 ## Development
 
 ```sh
-cd server && uv run --group dev pytest -q
+git clone https://github.com/fedetic/garmin-coach-plugin.git && cd garmin-coach-plugin
+cd server && uv run --group dev pytest -q && cd ..
 claude plugin validate .
+claude --plugin-dir .        # run Claude Code with your local copy
 ```

@@ -3,14 +3,22 @@
     "SessionStart": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh\" start", "timeout": 60 }
+          {
+            "type": "command",
+            "command": "uv run --quiet --frozen --project \"${CLAUDE_PLUGIN_ROOT}/server\" coach-session start",
+            "timeout": 60
+          }
         ]
       }
     ],
     "SessionEnd": [
       {
         "hooks": [
-          { "type": "command", "command": "bash \"${CLAUDE_PLUGIN_ROOT}/scripts/session.sh\" end", "timeout": 60 }
+          {
+            "type": "command",
+            "command": "uv run --quiet --frozen --project \"${CLAUDE_PLUGIN_ROOT}/server\" coach-session end",
+            "timeout": 60
+          }
         ]
       }
     ]
