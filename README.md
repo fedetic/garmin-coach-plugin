@@ -1,7 +1,8 @@
 # garmin-coach
 
 An adaptive training coach for Garmin watch owners that runs inside your own
-AI assistant (Claude Code or OpenAI Codex) on your own subscription.
+AI assistant (Claude Code or OpenAI Codex) on your own subscription. It
+creates your workouts and syncs them to your Garmin watch automatically.
 
 - **Onboarding**: reads your Garmin history first (activities, lifts, VO2max,
   HRV/sleep baselines), then asks about goals, injuries, schedule, equipment
