@@ -405,7 +405,9 @@ with that in mind.
   dependencies (including the same `garminconnect` 0.3.2 the coach server
   uses). That was a targeted check, not a full audit. Pinning means a later
   change to that repo can't reach your password or token until the pin is
-  deliberately moved.
+  deliberately moved. A weekly GitHub Action (`upstream-check.yml`) opens an
+  issue when there's a newer version, with the diff and an automated scan
+  of the new code; it never moves the pin itself.
 - It's still the server with about 150 tools, including ones that delete
   activities, so keep it off when you don't need it. opencode does this by
   default, and the coach server covers the everyday flows itself.
