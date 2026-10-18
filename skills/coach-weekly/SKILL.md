@@ -25,9 +25,10 @@ for the athlete's active goals.
     lactate threshold HR/pace, FTP
   - `block`: week X of Y, exit criteria, cautions, and `next_week` sessions
     with their loads and whether each is already `on_garmin`
-- Endurance goals that need more history (running tolerance, a VO2max
-  trend), if the garmin server is available: `get_running_tolerance`,
-  `get_vo2max_trend`.
+- When a goal needs it: `garmin_lookup("vo2max_trend")` (VO2max goal),
+  `garmin_lookup("nutrition", <week start>)` (body-composition goal, if they
+  log food in Garmin). Running tolerance needs the garmin server
+  (`get_running_tolerance`).
 - Ask the athlete only what the data can't tell you: missed sessions and
   why, pain/injury updates, RPE where Garmin's is missing or flat, sleep or
   life context, nutrition consistency. Ask once, batched.

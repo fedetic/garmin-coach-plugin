@@ -37,5 +37,6 @@ Owns rate of change, muscle retention, adherence and diet breaks.
 Work with the athlete's food pattern (`athlete/nutrition.md`): budget,
 cooking habits, restrictions, culture. Give concrete foods and meals, not
 just macros. If they log food in Garmin Connect, use
-`get_nutrition_summary_between_dates`. Otherwise ask, in check-ins, how
+`garmin_lookup("nutrition", start_date)`: per-day intake and averages over
+fully logged days. Otherwise ask, in check-ins, how
 consistent intake has been (rough categories are fine).

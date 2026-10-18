@@ -49,7 +49,8 @@ device or tool) can pick up.
   `garmin_daily_snapshot` (daily check),
   `garmin_sync_since` (weekly data pull + summary), `push_week` (block yml
   week -> verified, scheduled Garmin workouts), `validate_block` (check a
-  block yml before activating or pushing it).
+  block yml before activating or pushing it), `garmin_lookup` (HR zones,
+  nutrition log, VO2max trend, when a goal needs them).
 - **coach server** (deterministic, use instead of mental math):
   `workspace_status`, `query`, `log`, `update_record`, `upsert_training_block`,
   `record_metrics`, `readiness_report`, `estimate_1rm`, `prescribe_load`,

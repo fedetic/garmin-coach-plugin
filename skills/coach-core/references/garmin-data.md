@@ -1,5 +1,10 @@
 # Garmin data: where each signal comes from
 
+The coach server already covers the common needs in one call each:
+`garmin_history` (setup), `garmin_daily_snapshot`, `garmin_sync_since`,
+`push_week`, and `garmin_lookup` (HR zones, nutrition, VO2max trend). Use
+this reference when those fail or for something they don't cover.
+
 Tool names are from the `garmin` MCP server (Taxuspt/garmin_mcp, unofficial
 Garmin Connect API). Not every watch records everything: a field that's
 missing or null is reported as missing, never estimated.

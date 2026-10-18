@@ -406,6 +406,15 @@ def garmin_history(weeks: int = 12, backfill_days: int = 60) -> dict:
 
 
 @mcp.tool()
+def garmin_lookup(topic: str, start_date: str = "", end_date: str = "") -> dict:
+    """Occasional Garmin data, pre-parsed. topic:
+    - hr_zones: the athlete's saved HR zones in bpm per sport (for zone targets, easy-run caps)
+    - nutrition: logged intake per day + averages over fully logged days (default last 14 days, max 61)
+    - vo2max_trend: VO2max on the days Garmin recomputed it (default 12 weeks, max 90 days)"""
+    return ops.lookup(_root(), topic, start_date, end_date)
+
+
+@mcp.tool()
 def validate_block(block: str = "") -> dict:
     """Check a block yml before activating or pushing it: required fields, every session buildable
     for Garmin in every week (exercise keys, targets), reps/sets present, pct_1rm/RPE sane, loads

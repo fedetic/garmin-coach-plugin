@@ -46,9 +46,9 @@ Present it as "Here's what I can see from your Garmin" in a few lines and
 let them correct it.
 
 If it fails with a Garmin login error, help them run the command it
-names. Garmin's heart rate zones and nutrition logs aren't in it; get them
-from the garmin server (`get_heart_rate_zones`, nutrition tools) if an
-endurance or nutrition goal needs them.
+names. For an endurance goal add `garmin_lookup("hr_zones")`; for a nutrition or
+body-composition goal, `garmin_lookup("nutrition")` (only has data if they
+log food in Garmin Connect).
 
 ## 3. Conversation (one topic at a time, 1-3 questions per turn)
 

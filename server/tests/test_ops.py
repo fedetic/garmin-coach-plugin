@@ -77,6 +77,27 @@ class FakeGarmin:
         return [{"productDisplayName": "Venu 3S", "primary": True, "hrvStatusCapable": True,
                  "trainingReadinessCapable": False, "bodyBatteryCapable": True, "sleepScoreCapable": True}]
 
+    garmin_connect_metrics_url = "/metrics-service/metrics/maxmet/daily"
+
+    def connectapi(self, url, params=None):
+        if url == "/biometric-service/heartRateZones":  # shape probed on a live account
+            return [{"trainingMethod": "HR_MAX", "restingHeartRateUsed": 70, "lactateThresholdHeartRateUsed": None,
+                     "zone1Floor": 95, "zone2Floor": 114, "zone3Floor": 133, "zone4Floor": 152, "zone5Floor": 171,
+                     "maxHeartRateUsed": 190, "sport": "DEFAULT"}]
+        if url == "/nutrition-service/food/logs/range":
+            full = {"mealDetails": [{"loggedFoods": [1, 2]}, {"loggedFoods": [3, 4]}]}
+            return {"dailyNutritionSummaries": [
+                {"mealDate": params["startDate"], "dailyNutritionContent": {"calories": 2600, "protein": 150,
+                                                                            "carbs": 300, "fat": 80}, **full},
+                {"mealDate": params["endDate"], "dailyNutritionContent": {"calories": 2400, "protein": 130,
+                                                                          "carbs": 280, "fat": 70}, **full},
+                {"mealDate": "x-partial", "dailyNutritionContent": {"calories": 400}, "mealDetails": [{"loggedFoods": [1]}]}]}
+        if url.startswith(self.garmin_connect_metrics_url):
+            return [{"generic": {"calendarDate": f"{TODAY - timedelta(days=30)}", "vo2MaxPreciseValue": 50.2}},
+                    {"generic": {"calendarDate": f"{TODAY - timedelta(days=2)}", "vo2MaxPreciseValue": 51.1}}] \
+                if self.runner else []
+        raise AssertionError(f"unexpected connectapi {url}")
+
     def get_race_predictions(self):
         return {"calendarDate": str(TODAY), "time5K": 1290, "time10K": 2700, "timeHalfMarathon": 6000,
                 "timeMarathon": 12900} if self.runner else {}
@@ -418,3 +439,20 @@ def test_history(ws):
     assert h["strength_data_quality"]["unclassified_sets"] == 4 and h["strength_data_quality"]["effort_varies"] is False
     assert "hrv_overnight_ms" in h["recovery_baselines"] and h["garmin_endurance"] is None
     assert len(str(h)) < 3500
+
+
+def test_lookup(ws):
+    root, fake = ws
+    z = ops.lookup(root, "hr_zones")["hr_zones"][0]
+    assert z["zones_bpm"] == {"Z1": "95-113", "Z2": "114-132", "Z3": "133-151", "Z4": "152-170", "Z5": "171-190"}
+    n = ops.lookup(root, "nutrition", (TODAY - timedelta(days=200)).isoformat())
+    assert n["range"][0] == (TODAY - timedelta(days=60)).isoformat()  # clamped to Garmin's 61-day limit
+    assert n["days_logged"] == 2 and n["avg_on_logged_days"]["kcal"] == 2500 and n["partial_days"] == ["x-partial"]
+    v = ops.lookup(root, "vo2max_trend")
+    assert v["source"] == "coach database" and isinstance(v["points"], str)
+    fake.runner = True
+    v = ops.lookup(root, "vo2max_trend")
+    assert v["source"] == "garmin" and v["vo2max_change"] == 0.9 and len(v["points"]) == 2
+    fake.runner = False
+    assert ops.lookup(root, "vo2max_trend")["source"] == "coach database"  # stored on the previous call
+    assert "error" in ops.lookup(root, "sleep")

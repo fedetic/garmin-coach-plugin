@@ -218,6 +218,53 @@ def fetch_endurance(day: str) -> dict:
     return out
 
 
+# ---------------------------------------------------------------- on-demand lookups
+
+def fetch_hr_zones() -> list[dict]:
+    """Saved HR zone profiles (DEFAULT plus any sport overrides) as bpm ranges."""
+    out = []
+    for z in client().connectapi("/biometric-service/heartRateZones") or []:
+        floors = [z.get(f"zone{i}Floor") for i in range(1, 6)]
+        if not all(floors):
+            continue
+        top = z.get("maxHeartRateUsed")
+        zones = {f"Z{i + 1}": f"{floors[i]}-{(floors[i + 1] - 1) if i < 4 else top or ''}" for i in range(5)}
+        out.append({k: v for k, v in {
+            "sport": (z.get("sport") or "DEFAULT").lower(), "method": z.get("trainingMethod"),
+            "max_hr": top, "resting_hr": z.get("restingHeartRateUsed"),
+            "lt_hr": z.get("lactateThresholdHeartRateUsed"), "zones_bpm": zones,
+        }.items() if v is not None})
+    return out
+
+
+def fetch_nutrition(start: str, end: str) -> list[dict]:
+    """Per-day logged intake. Field names follow the garmin MCP server's parser (61-day max)."""
+    data = client().connectapi("/nutrition-service/food/logs/range",
+                               params={"startDate": start, "endDate": end}) or {}
+    out = []
+    for d in data.get("dailyNutritionSummaries") or []:
+        c = d.get("dailyNutritionContent") or {}
+        out.append({"date": d.get("mealDate"), "kcal": c.get("calories"), "protein_g": c.get("protein"),
+                    "carbs_g": c.get("carbs"), "fat_g": c.get("fat"),
+                    "items": sum(len(m.get("loggedFoods") or []) for m in d.get("mealDetails") or [])})
+    return out
+
+
+def fetch_vo2max_history(start: str, end: str) -> list[dict]:
+    """Days Garmin recomputed VO2max (no carried-forward days): [{date, vo2max?, vo2max_cycling?}]."""
+    g = client()
+    data = _safe(g.connectapi, f"{g.garmin_connect_metrics_url}/{start}/{end}") or []
+    by_day: dict[str, dict] = {}
+    for item in data if isinstance(data, list) else [data]:
+        for kind, name in (("generic", "vo2max"), ("cycling", "vo2max_cycling")):
+            sec = (item or {}).get(kind) or {}
+            val = sec.get("vo2MaxPreciseValue") or sec.get("vo2MaxValue")
+            day = sec.get("calendarDate") or (item or {}).get("calendarDate")
+            if val and day:
+                by_day.setdefault(day[:10], {"date": day[:10]})[name] = round(float(val), 1)
+    return [by_day[d] for d in sorted(by_day)]
+
+
 # ---------------------------------------------------------------- activities
 
 def list_activities(start: str, end: str) -> list[dict]:

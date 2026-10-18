@@ -7,7 +7,7 @@ general aerobic fitness. This is the module that uses Garmin's data most heavily
 
 | Goal | `metric` | Garmin source |
 |---|---|---|
-| Raise VO2max | `health:vo2max` (record daily from `get_vo2max_trend`) | Garmin estimate from outdoor GPS runs/rides with HR. Changes slowly; trust 4-8 week trends, not day-to-day |
+| Raise VO2max | `health:vo2max` (`garmin_lookup("vo2max_trend")`; the weekly sync stores the latest) | Garmin estimate from outdoor GPS runs/rides with HR. Changes slowly; trust 4-8 week trends, not day-to-day |
 | Race time | manual (`race:10k`, seconds), plus `get_race_predictions` as a proxy | predictor follows VO2max and doesn't account for race-specific fitness; test with a time trial |
 | Threshold | `get_lactate_threshold` (HR and pace) | needs a guided LT test or chest strap on many watches |
 | Cycling | `get_cycling_ftp` | power meter required |
@@ -33,8 +33,9 @@ balance for injury risk.
 
 ## Intensity distribution
 
-Use the athlete's Garmin HR zones (`get_heart_rate_zones`). Update them
-after an LT test.
+Use the athlete's Garmin HR zones (`garmin_lookup("hr_zones")`): `hr_zone`
+targets in a block run on these ranges on the watch. Update them after an
+LT test (the garmin server's `set_heart_rate_zones`).
 
 - About 75-80% of time easy (Z1-Z2: conversational), the rest moderate to
   hard. Polarized or pyramidal both work; most amateurs run their easy days

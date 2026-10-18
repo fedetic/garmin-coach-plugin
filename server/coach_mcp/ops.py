@@ -866,3 +866,58 @@ def history(root: Path, weeks: int = 12, backfill_days: int = 60) -> dict:
                        "confirm numbers with the athlete. watch_cannot_measure lists metrics never to ask "
                        "Garmin for or report as missing.",
     }
+
+
+# ---------------------------------------------------------------- 6. on-demand lookups
+
+LOOKUPS = {"hr_zones": 0, "nutrition": 14, "vo2max_trend": 84}  # topic -> default days back
+
+
+def lookup(root: Path, topic: str, start: str = "", end: str = "") -> dict:
+    """Occasional Garmin data, pre-parsed: hr_zones, nutrition, vo2max_trend."""
+    if topic not in LOOKUPS:
+        return {"error": f"unknown topic {topic!r}; one of {sorted(LOOKUPS)}"}
+    end_d = date.fromisoformat(end) if end else date.today()
+    start_d = date.fromisoformat(start) if start else end_d - timedelta(days=LOOKUPS[topic] - 1)
+    if topic == "hr_zones":
+        zones = gl.fetch_hr_zones()
+        return {"hr_zones": zones or "no zones saved in Garmin",
+                "note": "workout targets use these zones on the watch: hr_zone N in a block structure means "
+                        "the athlete's own ZN range here"}
+    if topic == "nutrition":
+        start_d = max(start_d, end_d - timedelta(days=60))
+        days = gl.fetch_nutrition(start_d.isoformat(), end_d.isoformat())
+        logged = [d for d in days if d["items"] >= 3 and d["kcal"]]
+        partial = [d["date"] for d in days if 0 < d["items"] < 3]
+        def avg(k):
+            xs = [d[k] for d in logged if d[k] is not None]
+            return round(sum(xs) / len(xs)) if xs else None
+        return {"range": [start_d.isoformat(), end_d.isoformat()],
+                "days_logged": len(logged), "days_in_range": (end_d - start_d).days + 1,
+                "avg_on_logged_days": {k: avg(k) for k in ("kcal", "protein_g", "carbs_g", "fat_g")} if logged else None,
+                "partial_days": partial or None,
+                "days": days or "nothing logged in Garmin for this range",
+                "note": "averages use days with 3+ logged items only; partial days read as low intake"}
+    # vo2max_trend
+    start_d = max(start_d, end_d - timedelta(days=89))
+    pts = gl.fetch_vo2max_history(start_d.isoformat(), end_d.isoformat())
+    source = "garmin"
+    if not pts:  # fall back to what earlier syncs stored
+        rows = db.connect(root).execute(
+            "SELECT date, metric, value FROM health_metrics WHERE metric IN ('vo2max', 'vo2max_cycling') "
+            "AND date BETWEEN ? AND ? ORDER BY date", (start_d.isoformat(), end_d.isoformat())).fetchall()
+        by: dict[str, dict] = {}
+        for r in rows:
+            by.setdefault(r["date"], {"date": r["date"]})[r["metric"]] = r["value"]
+        pts, source = list(by.values()), "coach database"
+    else:
+        store_metrics(db.connect(root), [{"date": p["date"], "metric": k, "value": v}
+                                         for p in pts for k, v in p.items() if k != "date"])
+    out = {"range": [start_d.isoformat(), end_d.isoformat()], "source": source,
+           "points": pts or "no VO2max recorded (needs outdoor runs/rides with GPS and HR)"}
+    for k in ("vo2max", "vo2max_cycling"):
+        xs = [p[k] for p in pts if k in p]
+        if len(xs) >= 2:
+            out[f"{k}_change"] = round(xs[-1] - xs[0], 1)
+    out["note"] = "changes under 0.5 are noise; read the 4-6 week direction"
+    return out
