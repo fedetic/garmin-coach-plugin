@@ -106,6 +106,13 @@ if ($Tool -eq "claude") {
     claude plugin install garmin-coach@garmin-coach | Out-Null
     if ($LASTEXITCODE -eq 0) { Ok "plugin installed in Claude Code" } else { Fail "plugin install failed - run: claude plugin install garmin-coach@garmin-coach" }
   }
+  # fetch Python and the server's packages now, so the first session doesn't time out on them
+  $ServerDir = Get-ChildItem (Join-Path $HOME ".claude\plugins\cache\garmin-coach\garmin-coach\*\server") -Directory -ErrorAction SilentlyContinue |
+    Sort-Object LastWriteTime | Select-Object -Last 1
+  if ($ServerDir) {
+    uv sync --quiet --frozen --project $ServerDir.FullName
+    if ($LASTEXITCODE -eq 0) { Ok "coach server ready" }
+  }
 } else {
   if (Test-Path (Join-Path $PluginDir ".git")) { git -C $PluginDir pull --quiet; Ok "plugin updated" }
   else {

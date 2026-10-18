@@ -63,6 +63,9 @@ if [ "$TOOL" = claude ]; then
     claude plugin install garmin-coach@garmin-coach >/dev/null || die "plugin install failed - run: claude plugin install garmin-coach@garmin-coach"
     ok "plugin installed in Claude Code"
   fi
+  # fetch Python and the server's packages now, so the first session doesn't time out on them
+  SERVER_DIR=$(ls -dt "$HOME"/.claude/plugins/cache/garmin-coach/garmin-coach/*/server 2>/dev/null | head -1 || true)
+  if [ -n "$SERVER_DIR" ] && uv sync --quiet --frozen --project "$SERVER_DIR"; then ok "coach server ready"; fi
 else
   if [ -d "$PLUGIN_DIR/.git" ]; then git -C "$PLUGIN_DIR" pull --quiet && ok "plugin updated"
   else git clone --quiet "$REPO" "$PLUGIN_DIR" && ok "plugin downloaded to $PLUGIN_DIR"; fi
