@@ -23,7 +23,8 @@ creates your workouts and syncs them to your Garmin watch automatically.
   substitutions and load rounding to the plates or dumbbells you own.
 
 Your data stays in a folder on your computer (`~/coach`). The plugin holds
-no athlete data.
+no athlete data. What does leave your computer, and to whom, is spelled out in
+[Security and privacy](#security-and-privacy).
 
 > Not medical advice. The Garmin connection uses the unofficial Garmin Connect
 > API ([Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp)); it can
@@ -323,6 +324,95 @@ The installer registers the full Garmin server but leaves it disabled: its
 server covers setup, daily, weekly, workouts, HR zones, nutrition and VO2max
 by itself. Turn the Garmin server on (`"enabled": true` under `mcp.garmin`)
 only with a large context or a hosted model.
+
+## Security and privacy
+
+Short version: the plugin itself sends your data nowhere except Garmin.
+But the AI model you pick reads your health data, and the Garmin connection
+is unofficial third-party code that holds a full-access login token. Decide
+with that in mind.
+
+### Where your data goes
+
+| Part | What it has | Where it goes |
+|---|---|---|
+| Your coaching folder (`~/coach`) | everything: goals, injuries, plans, daily recovery metrics, workouts, notes | stays on your computer, unless you turn on git sync (then also your git remote) |
+| Coach server (this repo) | reads and writes your folder and your Garmin account | talks only to Garmin Connect (and git, if sync is on). No telemetry, no server of ours |
+| Garmin login token (`~/.garminconnect`) | full read/write access to your Garmin Connect account | stays on your computer, readable only by your user |
+| The AI model | whatever the coach reads during a conversation: recovery metrics, weight, injuries, training history, your answers | **hosted model:** sent to that provider. **Local model:** stays on your computer |
+
+### This repo
+
+- Open source (MIT): you can read every line that runs. The coach server's
+  dependencies are pinned in `server/uv.lock` (with hashes) and installed
+  with `--frozen`, so an update upstream can't slip new code in.
+- The only network traffic is to Garmin Connect, through
+  [python-garminconnect](https://github.com/cyberjunky/python-garminconnect)
+  (pinned to 0.3.2), plus `git pull`/`push` of your coaching folder if you
+  turn on git sync.
+- Garmin writes are narrow: the coach creates, schedules, replaces and
+  deletes only workouts it created itself (tracked in its database), checks
+  each upload against the plan, and removes it again if Garmin stored
+  something different. The skills tell the coach to ask before touching
+  anything else on your calendar.
+- The session hooks only run inside a coaching folder and only do a
+  database dump/restore and git there.
+
+### Using a hosted model (Claude, ChatGPT/Codex, or a cloud provider in opencode)
+
+- Your training and health data is part of the conversation, so it goes to
+  that provider and is handled under their terms. Before you start, check the
+  provider's privacy settings, in particular whether your chats may be used
+  to train models and how long they are kept.
+- The coach only needs what you choose to tell it. Your name is optional,
+  and a medical history isn't required (the safety screen is a few short
+  questions; answer only what you're comfortable sharing).
+- The model acts through tools that edit files and change your Garmin
+  calendar. Claude Code and Codex ask before running tools unless you've
+  told them not to; leaving those prompts on is the safe default.
+- Text from Garmin (activity names, notes) reaches the model. A malicious
+  note could try to steer it ("prompt injection"). The impact is limited to
+  what the tools can do, which is why the opencode `coach` agent has no
+  shell or web access.
+
+### Using a local model (opencode + Ollama)
+
+- Model inference happens on your machine; the only outside traffic is the
+  coach server's calls to Garmin.
+- opencode and Ollama are third-party software with their own update and
+  sharing features. opencode can upload a session when you share it; turn
+  that off with `"share": "disabled"` in `~/.config/opencode/opencode.json`.
+
+### The unofficial Garmin connection
+
+- There is no public Garmin API for this. The coach server and the optional
+  [Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp) server log in
+  the way the Garmin Connect website does. Neither is made or endorsed by
+  Garmin. Garmin may block or break it at any time, and using it is your
+  decision under Garmin's terms.
+- **Your password** is entered once into the `garmin-mcp-auth` login tool
+  (from Taxuspt/garmin_mcp) and is not stored. What is stored is a login
+  token in `~/.garminconnect` (owner-only file permissions). It lasts about
+  6 months and can do anything your account can, so treat it like a
+  password: never commit it or copy it into your coaching folder. To revoke
+  it, delete `~/.garminconnect`. If you think it leaked, also change your
+  Garmin password.
+- **The garmin MCP server is not pinned.** The setup runs it straight from
+  the latest code on that GitHub repo, so whatever is published there runs
+  with your token the next time it starts. It's also the server with about
+  150 tools, including ones that delete activities. To reduce the risk:
+  - keep it off when you don't need it (opencode already does this by
+    default; the coach server covers the everyday flows itself), and
+  - pin it to a version you've reviewed by adding `@<commit>` to the URL in
+    the config, e.g.
+    `git+https://github.com/Taxuspt/garmin_mcp@<commit>` in `.mcp.json`,
+    `~/.codex/config.toml` or `~/.config/opencode/opencode.json`.
+
+### Git sync between computers
+
+`data/coach.sql` is a full text copy of your database, health data included.
+Only sync to a **private** repository, and remember that the git host then
+stores that data too.
 
 ## Updating and removing
 
