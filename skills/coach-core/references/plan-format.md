@@ -76,13 +76,28 @@ sessions:
     name: "Wed - Easy run"
     kind: endurance
     sport: running
-    structure:               # maps to garmin create_run_workout / create_run_interval_workout
-      warmup: {duration_min: 10, target: "Z1-Z2"}
+    structure:               # push_week builds this; parts run in this order
+      warmup: {duration_min: 10, target: {hr_zone: 1}}
       main: {duration_min: 30, target: {hr_zone: 2}}
       cooldown: {duration_min: 5}
     weeks:
       1: {main_duration_min: 30}
       2: {main_duration_min: 35}
+  - id: fri_intervals
+    day: Friday
+    name: "Fri - 1k repeats"
+    kind: endurance
+    sport: running             # running | cycling | walking
+    structure:
+      warmup: {duration_min: 15}
+      intervals:
+        repeats: 4
+        work: {distance_km: 1, target: {pace_min_km: ["4:20", "4:10"]}}
+        recovery: {duration_sec: 90}
+      cooldown: {duration_min: 10}
+    weeks:
+      2: {repeats: 5}
+      3: {intervals: {repeats: 6, work: {distance_km: 1, target: {pace_min_km: ["4:15", "4:05"]}}}}
 
 log:                         # dated actuals and decisions, newest first, one or two lines each
   - "2026-09-28 wk3 Mon: 2x1 @97.5kg, workout_rpe 80 = RPE8, matches target"
@@ -92,6 +107,13 @@ reviews: "see agent_reviews WHERE block_id='block_02'"
 ```
 
 Conventions:
+- Endurance parts: `warmup`, `main`, `intervals` (`repeats`, `work`,
+  optional `recovery`), `cooldown`. Each step ends on `duration_min`,
+  `duration_sec` or `distance_km`. A target is one of `{hr_zone: 1-5}`,
+  `{hr_bpm: [low, high]}` or `{pace_min_km: [slow, fast]}`; leave it out for
+  no target. A zone range like "Z1-Z2" is not a Garmin target: pick one zone
+  or give bpm. Week overrides replace a part's fields (`{main: {...}}`) or
+  one field (`main_duration_min`, `repeats`).
 - `weight_kg` is always the rounded, buildable load (`prescribe_load`), and
   `pct_1rm` keeps the reasoning.
 - Put actuals and changes in `log`, not as comments scattered through the file.

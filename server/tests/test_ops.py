@@ -73,7 +73,7 @@ class FakeGarmin:
     def upload_workout(self, w):
         self.next_id += 1
         stored = copy.deepcopy(w)
-        if self.mangle:  # simulate Garmin dropping the weight from the first lift
+        if self.mangle and w["sportType"]["sportTypeKey"] == "strength_training":  # Garmin drops the first lift's weight
             stored["workoutSegments"][0]["workoutSteps"][1]["workoutSteps"][0].pop("weightValue", None)
         self.workouts[str(self.next_id)] = stored
         self.calls.append(("upload", self.next_id))
@@ -109,7 +109,10 @@ def ws(tmp_path, monkeypatch):
                                              2: {"sets": 2, "reps": 2, "weight_kg": 95, "rpe": 7.5}}},
                  {"exercise": "handstand_hold", "plain": True, "sets": 2, "duration_sec": 30}]},
             {"id": "easy_run", "day": TODAY.strftime("%A"), "name": "Easy run", "kind": "endurance",
-             "structure": {"main": {"duration_min": 30}}},
+             "sport": "running", "structure": {"warmup": {"duration_min": 10}, "main": {"duration_min": 30,
+                                                                                      "target": {"hr_zone": 2}}},
+             "weeks": {2: {"main_duration_min": 35}}},
+            {"id": "mobility", "day": TODAY.strftime("%A"), "name": "Mobility", "kind": "mobility"},
         ]}
     (root / "plan" / "blocks" / "block-01-test.yml").write_text(yaml.safe_dump(block))
     con = db.connect(root)
@@ -174,16 +177,18 @@ def test_push_week_create_keep_replace(ws):
     root, fake = ws
     out = ops.push_week(root, dry_run=True)
     assert out["sessions"][0]["status"] == "would create" and not fake.calls
-    assert out["sessions"][1]["status"].startswith("skipped: non-strength")
+    assert out["sessions"][1]["status"] == "would create"
+    assert out["sessions"][2]["status"].startswith("skipped: mobility session has no `structure`")
 
     out = ops.push_week(root)
     s = out["sessions"][0]
     assert s["status"] == "created, verified, scheduled" and s["name"].endswith("(wk1)")
     first_id = s["garmin_workout_id"]
-    assert len(fake.schedule) == 1 and fake.schedule[0]["scheduleDate"] == TODAY.isoformat()
+    assert out["sessions"][1]["status"] == "created, verified, scheduled"
+    assert len(fake.schedule) == 2 and {x["scheduleDate"] for x in fake.schedule} == {TODAY.isoformat()}
 
     out = ops.push_week(root)  # nothing changed
-    assert out["sessions"][0]["status"].startswith("unchanged") and len(fake.schedule) == 1
+    assert out["sessions"][0]["status"].startswith("unchanged") and len(fake.schedule) == 2
 
     p = root / "plan" / "blocks" / "block-01-test.yml"
     b = yaml.safe_load(p.read_text())
@@ -192,9 +197,11 @@ def test_push_week_create_keep_replace(ws):
     out = ops.push_week(root)
     s = out["sessions"][0]
     assert s["replaced"] == [first_id] and ("delete", int(first_id)) in fake.calls
-    assert len(fake.schedule) == 1 and str(fake.schedule[0]["workoutId"]) == s["garmin_workout_id"]
-    rows = db.query(root, "SELECT status FROM garmin_workouts ORDER BY id")
-    assert [r["status"] for r in rows] == ["replaced", "scheduled"]
+    assert len(fake.schedule) == 2 and s["garmin_workout_id"] in {str(x["workoutId"]) for x in fake.schedule}
+    assert out["sessions"][1]["status"].startswith("unchanged")
+    rows = db.query(root, "SELECT session, status FROM garmin_workouts ORDER BY id")
+    assert [(r["session"], r["status"]) for r in rows] == [
+        ("today_lift", "replaced"), ("easy_run", "scheduled"), ("today_lift", "scheduled")]
 
 
 def test_push_week_rejects_unverified_upload(ws):
@@ -202,7 +209,8 @@ def test_push_week_rejects_unverified_upload(ws):
     fake.mangle = True
     s = ops.push_week(root)["sessions"][0]
     assert s["status"].startswith("FAILED") and s["problems"]
-    assert not fake.schedule and not fake.workouts  # removed again, nothing scheduled
+    assert [x["workoutName"] for x in fake.schedule] == [f"{TODAY:%a} - Easy run (wk1)"]  # lift never scheduled
+    assert len(fake.workouts) == 1  # the bad upload was removed again
 
 
 def test_sync_since_summary(ws):
@@ -273,3 +281,35 @@ def test_old_database_migrates(tmp_path):
     con = db.connect(root)
     assert "garmin_workout_id" in db.columns(con, "workouts")
     assert "payload_hash" in db.columns(con, "garmin_workouts")
+
+
+def test_endurance_builder():
+    from coach_mcp import garmin
+    st = garmin.endurance_structure(
+        {"warmup": {"duration_min": 10, "target": "Z1-Z2"},
+         "intervals": {"repeats": 4, "work": {"distance_km": 1, "target": {"pace_min_km": ["4:10", "4:20"]}},
+                       "recovery": {"duration_sec": 90}},
+         "cooldown": {"duration_min": 5}},
+        {"repeats": 5, "warmup_duration_min": 15})
+    b = garmin.build_endurance_workout("Tue - Intervals (wk2)", "run", st)
+    steps = b["workout"]["workoutSegments"][0]["workoutSteps"]
+    assert [x["stepOrder"] for x in steps] == [1, 2, 5] and b["step_count"] == 5
+    assert steps[0]["endConditionValue"] == 900 and steps[0]["targetType"]["workoutTargetTypeKey"] == "no.target"
+    assert "Z1-Z2" in b["warnings"][0]  # zone ranges aren't a Garmin target - flagged, not guessed
+    rep = steps[1]
+    assert rep["numberOfIterations"] == 5 and [x["stepOrder"] for x in rep["workoutSteps"]] == [3, 4]
+    work = rep["workoutSteps"][0]
+    assert work["endCondition"]["conditionTypeKey"] == "distance" and work["endConditionValue"] == 1000
+    assert work["targetValueOne"] == round(1000 / 260, 4) and work["targetValueTwo"] == round(1000 / 250, 4)
+    assert b["workout"]["description"].startswith("Warm-up 15 min + 5x(Rep 1 km 4:10-4:20/km / Easy 90s)")
+    with pytest.raises(ValueError):
+        garmin.build_endurance_workout("x", "swimming", {"main": {"duration_min": 30}})
+
+
+def test_verify_catches_target_change():
+    from coach_mcp import garmin
+    b = garmin.build_endurance_workout("Easy", "running", {"main": {"duration_min": 30, "target": {"hr_zone": 2}}})
+    fetched = copy.deepcopy(b["workout"])
+    assert ops.verify(b["workout"], fetched) == []
+    fetched["workoutSegments"][0]["workoutSteps"][0]["zoneNumber"] = 3
+    assert ops.verify(b["workout"], fetched)

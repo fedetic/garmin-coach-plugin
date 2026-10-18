@@ -1,84 +1,68 @@
 ---
 name: coach-garmin-sync
-description: Pushes garmin-coach block sessions to Garmin Connect as structured workouts and schedules them on the athlete's calendar - strength via validated repeat-group payloads, runs/rides via Garmin's workout tools - then verifies them and cleans up superseded templates. Use when a block activates, when a weekly check-in changes next week's sessions, when a daily check modifies today's workout, or when the user asks to push, fix or reschedule Garmin workouts. Not for reading Garmin history.
+description: Pushes garmin-coach block sessions to Garmin Connect as structured workouts and schedules them on the athlete's calendar - strength, runs, rides and walks from the block yml in one call - then verifies them and cleans up superseded templates. Use when a block activates, when a weekly check-in changes next week's sessions, when a daily check modifies today's workout, or when the user asks to push, fix or reschedule Garmin workouts. Not for reading Garmin history.
 ---
 
 # Garmin workout sync
 
-Load `coach-core` (`../coach-core/SKILL.md`). Inputs: the active block yml
-(the target week's prescriptions), `athlete/schedule.yml`, and the dates to
-schedule.
+Load `coach-core` (`../coach-core/SKILL.md`). The block yml is the source of
+truth: edit it first, then push.
 
-## Naming
+## Push (normal path)
 
-`"<Day> - <session name>"`, plus `" (wkN)"` when loads differ by week, e.g.
-`"Mon - Bench heavy (wk3)"`. Garmin truncates long names, so keep them under
-about 32 characters.
+1. Make sure every session in the target week is pushable:
+   - strength: each exercise has `garmin: {category, exercise}`. Missing:
+     `find_garmin_exercise(name)`, pick the right one and write it into the
+     yml. Things Garmin has no exercise for (handstand hold, mobility
+     circuit) get `plain: true`.
+   - run/ride/walk: `sport` and a `structure` in the format of
+     `../coach-core/references/plan-format.md`.
+2. `push_week(week=N, dry_run=true)` when anything is unusual (new block,
+   moved days, first push): it shows per session `would create`,
+   `would replace <id>` or `would keep (unchanged)`, plus builder warnings.
+3. `push_week(week=N)`. For each session it builds the workout from the yml,
+   uploads it, reads it back and compares it step by step (a mismatch
+   deletes the upload and reports `FAILED verification` with the
+   differences), schedules it, then unschedules and deletes the version it
+   replaces. Unchanged sessions keep their existing template.
+   - Move sessions: `dates={session_id: "YYYY-MM-DD"}`.
+   - Defaults: active block, current week; past dates skipped unless
+     `include_past=true`.
+4. Read the result:
+   - `warnings`: steps the watch won't recognise (unknown exercise, target
+     not understood). Fix the yml and push again.
+   - `skipped: ...`: the reason says what's missing.
+   - `FAILED verification`: don't retry blindly. Check the yml values the
+     `problems` name; if the yml is right, report it.
+   - `other_workouts_that_day`: something not from this push is on the
+     calendar (an old manual workout, a Garmin Coach plan). Ask before
+     removing it.
 
-## Strength sessions
+Names come out as `"<Day> - <session name> (wkN)"`. Keep session names short;
+Garmin truncates around 32 characters.
 
-1. **Map exercises.** Use each exercise's `garmin: {category, exercise}`
-   from the yml. Missing ones: `find_garmin_exercise(name)`, pick the right
-   one, and write it back into the yml so next time is mechanical. Things
-   Garmin has no exercise for (handstand hold, mobility circuit, stretch
-   routine) get `plain: true` with the target in the name.
-2. **Build.** Call `build_strength_workout(name, exercises)`, where each
-   exercise is `{name, category, exercise, sets, reps | duration_sec,
-   weight_kg, rest_sec, note}` from that week's prescription. Include the
-   **full session**, accessories, core and mobility as well as the main lifts.
-   Check the exercise count against the yml. Read `warnings`: each one is
-   a step that won't be recognised by the watch.
-3. **Upload.** Send the returned `workout` to the garmin server's
-   `upload_workout`.
-4. **Verify.** `get_workout_by_id` on the new id. For every weighted step,
-   check that category/exercise name are populated, weight and unit are
-   present, and steps with sets > 1 are inside a repeat with the right count.
-   Diff against the yml; don't eyeball it.
+## Manual path (fallback)
 
-Why the builder instead of `create_strength_workout`: that tool's `sets`
-field is decorative (one step per entry, no real repeats, rest fires once)
-and its weight field is dropped. The builder encodes the payload rules that
-Garmin actually accepts (see the module docstring in the coach server's
-`garmin.py`). If a payload field is in doubt, the garmin server has
-reference resources `workout://reference/structure` and
-`workout://templates/strength-circuit`; read them rather than guessing.
+Use it when `push_week` reports a Garmin login error, or for a sport it
+doesn't build yet (swimming and other sports). It needs the garmin server.
 
-## Endurance sessions
-
-Use the garmin server's `create_run_workout`, `create_run_interval_workout`,
-`create_walk_run_workout`, or `upload_workout` for custom structures (HR
-zone or pace targets, other sports). Read the tool's docstring for target
-formats and check `workout://reference/structure` for sport and target
-type ids. Targets come from the athlete's Garmin HR zones or LT pace in the
-block yml.
-
-## Schedule
-
-`schedule_week([{date, workout_id}, ...])` for a week, or
-`schedule_workout(workout_id, date)` for one day. Both are idempotent. Then
-`register_garmin_workout(id, name, block_id, week, session, scheduled_date)`
-for each, and add the ids to the block yml under `garmin:`.
-
-## Replace or correct
-
-1. Find the old entries: `query("SELECT * FROM garmin_workouts WHERE
-   status='scheduled' AND scheduled_date >= ?")` and/or
-   `get_scheduled_workouts(start, end)`.
-2. `unschedule_workout(scheduled_workout_id)`, then `delete_workout` the old
-   template, unless another date still uses it.
-3. `update_record("garmin_workouts", id, {"status": "replaced"})`.
-4. Build, upload, verify and schedule the new one.
+1. Build: `build_strength_workout(name, exercises)` for strength. For other
+   sports, use the garmin server's `upload_workout` with the sportType from
+   `workout://reference/structure`. Don't use `create_strength_workout`:
+   its sets are decorative and its weights are dropped.
+2. Upload with `upload_workout`, then `get_workout_by_id` and diff every
+   step against the yml (category/exercise, weight, reps or duration,
+   repeat counts, targets).
+3. `schedule_workout(workout_id, date)`, then
+   `register_garmin_workout(id, name, block_id, week, session, scheduled_date)`.
+4. Replacing: `unschedule_workout` the old entry, `delete_workout` its
+   template unless another date uses it, and
+   `update_record("garmin_workouts", id, {"status": "replaced"})`.
 
 Don't leave duplicate or orphaned templates in the athlete's library.
-Clean up in the same turn.
-
-## Reuse
-
-If a session is unchanged from a template already in Garmin (same exercises,
-sets, reps, loads), reschedule the existing template instead of creating a
-duplicate.
 
 ## Report
 
-One line per day: `Tue 10-20 - Lower body (wk2) ✓ scheduled`, plus any
-builder warnings the athlete should know about.
+One line per day: `Tue 10-20 - Lower body (wk2) ✓ scheduled` (or
+`unchanged`, `skipped: <reason>`), plus any warning the athlete should know
+about.

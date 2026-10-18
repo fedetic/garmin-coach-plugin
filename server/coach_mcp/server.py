@@ -385,7 +385,8 @@ def garmin_sync_since(start_date: str = "", end_date: str = "") -> dict:
 def push_week(block_id: str = "", week: int = 0, dates: dict | None = None, dry_run: bool = False,
               include_past: bool = False) -> dict:
     """Turn a block yml week into Garmin workouts in one call: builds every strength session
-    (that week's sets/reps/loads), uploads it, verifies the stored workout matches the plan
+    (that week's sets/reps/loads) and run/ride/walk session (its `structure` with that week's
+    overrides), uploads it, verifies the stored workout matches the plan
     step by step (removes it again if not), schedules it, replaces and deletes the coach's old
     version, and records it. Unchanged sessions keep their existing template.
     Defaults: active block, current week. dates: {session_id: YYYY-MM-DD} to move sessions.

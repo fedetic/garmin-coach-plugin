@@ -170,7 +170,8 @@ def session_summary(session: dict, week: int) -> dict:
     if out["kind"] == "strength":
         out["exercises"] = [_label(prescription(e, week)) for e in session.get("exercises", [])]
     else:
-        out["structure"] = {**(session.get("structure") or {}), **_week_key(session.get("weeks"), week)}
+        out["sport"] = session.get("sport")
+        out["structure"] = garmin.endurance_structure(session.get("structure"), _week_key(session.get("weeks"), week))
     if session.get("readiness_gate"):
         out["readiness_gate"] = session["readiness_gate"]
     if is_test(session):
@@ -469,8 +470,18 @@ def _flatten(steps: list) -> list[tuple]:
             ev = s.get("endConditionValue")
             out.append(((s.get("stepType") or {}).get("stepTypeKey"), s.get("category"), s.get("exerciseName"),
                         round(float(s["weightValue"]), 2) if s.get("weightValue") else None,
-                        round(float(ev)) if ev else None))
+                        round(float(ev)) if ev else None, _target_of(s)))
     return out
+
+
+def _target_of(step: dict) -> tuple | None:
+    key = (step.get("targetType") or {}).get("workoutTargetTypeKey")
+    if key in (None, "no.target"):
+        return None
+    if step.get("zoneNumber"):
+        return key, int(step["zoneNumber"])
+    return key, *(round(float(step[k]), 3) if step.get(k) is not None else None
+                  for k in ("targetValueOne", "targetValueTwo"))
 
 
 def verify(built: dict, fetched: dict) -> list[str]:
@@ -482,6 +493,30 @@ def verify(built: dict, fetched: dict) -> list[str]:
     if len(a) != len(b):
         diffs.append(f"step count planned {len(a)} got {len(b)}")
     return diffs[:10]
+
+
+def build_session(s: dict, name: str, week: int) -> dict:
+    """Block session -> garmin.build_* result. ValueError if it can't be pushed."""
+    if s.get("kind", "strength") == "strength":
+        exercises = []
+        for e in s.get("exercises", []):
+            p = prescription(e, week)
+            g = p.get("garmin") or {}
+            exercises.append({k: v for k, v in {
+                "name": p.get("name") or str(p.get("exercise", "")).replace("_", " ").title(),
+                "category": g.get("category"), "exercise": g.get("exercise"),
+                "sets": p.get("sets"), "reps": p.get("reps"), "duration_sec": p.get("duration_sec"),
+                "weight_kg": p.get("weight_kg"), "rest_sec": p.get("rest_sec"), "note": p.get("note"),
+                "plain": p.get("plain"),
+            }.items() if v is not None})
+        if not exercises:
+            raise ValueError("strength session has no exercises")
+        return garmin.build_strength_workout(name, exercises, warmup=s.get("warmup", True),
+                                             cooldown=s.get("cooldown", False))
+    if not s.get("structure"):
+        raise ValueError(f"{s.get('kind')} session has no `structure` to build a Garmin workout from")
+    return garmin.build_endurance_workout(name, s.get("sport", "running"),
+                                          garmin.endurance_structure(s["structure"], _week_key(s.get("weeks"), week)))
 
 
 def push_week(root: Path, block_id: str = "", week: int = 0, dates: dict | None = None,
@@ -498,10 +533,6 @@ def push_week(root: Path, block_id: str = "", week: int = 0, dates: dict | None 
         sid = s.get("id") or re.sub(r"\W+", "_", str(s.get("name", "session"))).lower()
         when = date.fromisoformat(dates[sid]) if dates and sid in dates else session_date(block, row, s, week)
         res = {"session": sid, "date": when.isoformat() if when else None}
-        if s.get("kind", "strength") != "strength":
-            res["status"] = "skipped: non-strength sessions are pushed with the garmin server's run/interval tools"
-            results.append(res)
-            continue
         if when is None:
             res["status"] = "skipped: no date (set block start_date + session day, or pass dates)"
             results.append(res)
@@ -513,19 +544,12 @@ def push_week(root: Path, block_id: str = "", week: int = 0, dates: dict | None 
         day_label = when.strftime("%a")
         name = f"{day_label} - {s.get('name', sid)}".replace(f"{day_label} - {day_label} - ", f"{day_label} - ")
         name = f"{name} (wk{week})"[:80]
-        exercises = []
-        for e in s.get("exercises", []):
-            p = prescription(e, week)
-            g = p.get("garmin") or {}
-            exercises.append({k: v for k, v in {
-                "name": p.get("name") or str(p.get("exercise", "")).replace("_", " ").title(),
-                "category": g.get("category"), "exercise": g.get("exercise"),
-                "sets": p.get("sets"), "reps": p.get("reps"), "duration_sec": p.get("duration_sec"),
-                "weight_kg": p.get("weight_kg"), "rest_sec": p.get("rest_sec"), "note": p.get("note"),
-                "plain": p.get("plain"),
-            }.items() if v is not None})
-        built = garmin.build_strength_workout(name, exercises, warmup=s.get("warmup", True),
-                                              cooldown=s.get("cooldown", False))
+        try:
+            built = build_session(s, name, week)
+        except ValueError as e:
+            res["status"] = f"skipped: {e}"
+            results.append(res)
+            continue
         workout = built["workout"]
         h = hashlib.sha256(json.dumps(workout, sort_keys=True).encode()).hexdigest()[:16]
         res.update(name=name, steps=built["step_count"], warnings=built["warnings"] or None)

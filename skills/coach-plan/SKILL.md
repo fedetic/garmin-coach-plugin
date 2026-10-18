@@ -41,7 +41,9 @@ and their logs/reviews.
   `../coach-core/references/equipment.md`.
 - Loads: `prescribe_load(one_rm, reps, rpe|pct, implement)`. Store both
   `pct_1rm` and the rounded `weight_kg`. Endurance: zones/paces from the
-  athlete's Garmin HR zones or LT data.
+  athlete's Garmin HR zones or LT data, written as a `structure` in the
+  plan-format shape (one zone, a bpm range or a pace range per step) so
+  `push_week` can build it.
 - Each exercise gets a Garmin mapping (`find_garmin_exercise`) so syncing is
   mechanical.
 - Periodize effort inside the block: conservative week 1, building, then a

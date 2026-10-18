@@ -79,9 +79,9 @@ session isn't made up by stacking.
 
 ## Garmin workouts
 
-Push run sessions with the garmin server's `create_run_workout`,
-`create_run_interval_workout` or `create_walk_run_workout` (beginners), or
-`upload_workout` with HR/pace targets for custom structures. Schedule them
-with `schedule_week`. Check the tool's own docstring for target formats.
-For cycling/swimming, use `upload_workout` with the right sportType from
-`workout://reference/structure`.
+Write run, ride and walk sessions with a `structure` (format in
+`../references/plan-format.md`) and `push_week` builds, verifies and
+schedules them with the strength sessions. Use HR zones or bpm ranges from
+the athlete's Garmin zones, or pace ranges from their LT pace. Swimming and
+other sports aren't built yet: use the garmin server's `upload_workout`
+with the right sportType from `workout://reference/structure`.
