@@ -45,7 +45,8 @@ device or tool) can pick up.
 ## Tools
 
 - **coach server, compound tools** (talk to Garmin directly; use these
-  first, one call each): `garmin_daily_snapshot` (daily check),
+  first, one call each): `garmin_history` (first setup),
+  `garmin_daily_snapshot` (daily check),
   `garmin_sync_since` (weekly data pull + summary), `push_week` (block yml
   week -> verified, scheduled Garmin workouts), `validate_block` (check a
   block yml before activating or pushing it).

@@ -777,3 +777,92 @@ def _dedupe_weeks(items: list[str]) -> list[str]:
         counts[key] = counts.get(key, 0) + 1
         first.setdefault(key, it)
     return [first[k] + (f" (+{n - 1} more weeks)" if n > 1 else "") for k, n in counts.items()]
+
+
+# ---------------------------------------------------------------- 5. setup history
+
+def history(root: Path, weeks: int = 12, backfill_days: int = 60) -> dict:
+    """First-setup pull: profile and watch, recovery baselines, the last `weeks` of training
+    imported and summarized, strength top sets, endurance context, body weight."""
+    con = db.connect(root)
+    today = date.today()
+    start = (today - timedelta(weeks=weeks)).isoformat()
+    profile = gl.fetch_profile(today.isoformat())
+    m = sync_metrics(con, (today - timedelta(days=backfill_days)).isoformat(), today.isoformat())
+    sync_activities(con, start, today.isoformat())
+    endu = gl.fetch_endurance(today.isoformat())
+    store_metrics(con, [{"date": today.isoformat(), "metric": k, "value": v} for k, v in endu["vo2max"].items()])
+
+    acts = [dict(r) for r in con.execute(
+        "SELECT * FROM workouts WHERE date >= ? ORDER BY date", (start,))]
+    by_sport: dict[str, list] = {}
+    for a in acts:
+        by_sport.setdefault(a["sport"] or "other", []).append(a)
+    training = {}
+    for sport, xs in sorted(by_sport.items(), key=lambda kv: -len(kv[1])):
+        days = [date.fromisoformat(a["date"]).strftime("%a") for a in xs if a["date"]]
+        common = sorted(set(days), key=lambda d: -days.count(d))[:4]
+        t = {"sessions": len(xs), "per_week": round(len(xs) / weeks, 1),
+             "avg_min": round(sum(a["duration_sec"] or 0 for a in xs) / len(xs) / 60),
+             "usual_days": common}
+        km = [a["distance_m"] / 1000 for a in xs if a.get("distance_m")]
+        if km:
+            t["avg_km"] = round(sum(km) / len(km), 1)
+        hr = [a["avg_hr"] for a in xs if a.get("avg_hr")]
+        if hr:
+            t["avg_hr"] = round(sum(hr) / len(hr))
+        training[sport] = t
+
+    lifts = []
+    rows = con.execute(
+        "SELECT s.exercise, s.weight_kg, s.reps, w.date FROM workout_sets s JOIN workouts w ON w.id = s.workout_id "
+        "WHERE w.date >= ? AND s.exercise IS NOT NULL", (start,)).fetchall()
+    by_ex: dict[str, list] = {}
+    for r in rows:
+        by_ex.setdefault(r["exercise"], []).append(r)
+    for ex, sets in sorted(by_ex.items(), key=lambda kv: -len({r["date"] for r in kv[1]}))[:10]:
+        weighted = [r for r in sets if r["weight_kg"] and r["reps"]]
+        item = {"exercise": ex, "sessions": len({r["date"] for r in sets})}
+        if weighted:
+            top = max(weighted, key=lambda r: (r["weight_kg"], r["reps"]))
+            best = max(weighted, key=lambda r: calc.e1rm(r["weight_kg"], r["reps"])["e1rm"] if r["reps"] <= 10 else 0)
+            item["heaviest"] = f"{top['weight_kg']:g}kg x{top['reps']} ({top['date']})"
+            if best["reps"] <= 10:
+                item["e1rm_floor"] = calc.e1rm(best["weight_kg"], best["reps"])["e1rm"]
+        else:
+            reps = [r["reps"] for r in sets if r["reps"]]
+            if reps:
+                item["best_reps"] = max(reps)
+        lifts.append(item)
+    total_sets = con.execute("SELECT count(*) FROM workout_sets s JOIN workouts w ON w.id = s.workout_id "
+                             "WHERE w.date >= ?", (start,)).fetchone()[0]
+    unknown = con.execute("SELECT count(*) FROM workout_sets s JOIN workouts w ON w.id = s.workout_id "
+                          "WHERE w.date >= ? AND s.exercise IS NULL", (start,)).fetchone()[0]
+    strength = [a for a in acts if a["sport"] == "strength_training"]
+    rated = [a["rpe"] for a in strength if a["rpe"] is not None]
+
+    rep = readiness_on(root, today.isoformat())
+    baselines = {}
+    for metric, f in rep["factors"].items():
+        if metric in readiness.RECOVERY and "baseline_mean" in f:
+            baselines[metric] = f"{round(f['baseline_mean'], 1):g}±{round(f['baseline_sd'], 1):g} (n={f['baseline_n']})"
+    w = con.execute("SELECT date, weight_kg FROM body_metrics WHERE weight_kg IS NOT NULL AND date >= ? "
+                    "ORDER BY date", (start,)).fetchall()
+    return {
+        "profile": profile,
+        "training_last_weeks": {"weeks": weeks, "by_sport": training or "no activities recorded"},
+        "strength_top_exercises": lifts or None,
+        "strength_data_quality": {
+            "sets_logged": total_sets, "unclassified_sets": unknown,
+            "effort_rated": f"{len(rated)}/{len(strength)} sessions" if strength else None,
+            "effort_varies": len(set(rated)) > 1 if len(rated) >= 3 else None,
+        } if strength else None,
+        "recovery_baselines": baselines or "not enough days yet",
+        "garmin_endurance": {**({"vo2max": endu["vo2max"]} if endu["vo2max"] else {}), **endu["context"]} or None,
+        "body_weight": {"first": f"{w[0]['weight_kg']:g}kg ({w[0]['date']})",
+                        "latest": f"{w[-1]['weight_kg']:g}kg ({w[-1]['date']})"} if w else None,
+        "sync": {"metric_days_fetched": m["days_fetched"], "activities_imported": len(acts)},
+        "how_to_read": "e1rm_floor assumes every set went to failure, so the true max is likely higher; "
+                       "confirm numbers with the athlete. watch_cannot_measure lists metrics never to ask "
+                       "Garmin for or report as missing.",
+    }

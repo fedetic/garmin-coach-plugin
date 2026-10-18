@@ -53,6 +53,41 @@ def days(start: str, end: str) -> list[str]:
     return [(a + timedelta(n)).isoformat() for n in range((b - a).days + 1)]
 
 
+# ---------------------------------------------------------------- profile
+
+CAPABILITIES = {"hrvStatusCapable": "hrv_status", "trainingReadinessCapable": "training_readiness",
+                "trainingStatusCapable": "training_status", "bodyBatteryCapable": "body_battery",
+                "sleepScoreCapable": "sleep_score", "vo2MaxRunCapable": "vo2max_run",
+                "vo2MaxBikeCapable": "vo2max_bike", "lactateThresholdCapable": "lactate_threshold",
+                "racePredictionsRunCapable": "race_predictions", "acuteTrainingLoadCapable": "acute_load"}
+
+
+def fetch_profile(today: str) -> dict:
+    """Athlete basics + which metrics the primary watch can produce at all."""
+    g = client()
+    ud = (_safe(g.get_user_profile) or {}).get("userData") or {}
+    st = _safe(g.get_userprofile_settings) or {}
+    out = {}
+    if ud.get("birthDate"):
+        b, t = date.fromisoformat(ud["birthDate"][:10]), date.fromisoformat(today)
+        out["age"] = t.year - b.year - ((t.month, t.day) < (b.month, b.day))
+    out.update({k: v for k, v in {
+        "sex": (ud.get("gender") or "").lower() or None,
+        "height_cm": ud.get("height"),
+        "weight_kg": round(ud["weight"] / 1000, 1) if ud.get("weight") else None,
+        "units": ud.get("measurementSystem") or st.get("measurementSystem"),
+        "timezone": st.get("timeZone"),
+        "training_days_in_garmin_settings": [d[:3].title() for d in ud.get("availableTrainingDays") or []] or None,
+    }.items() if v is not None})
+    devices = [d for d in (_safe(g.get_devices) or []) if isinstance(d, dict)]
+    dev = next((d for d in devices if d.get("primary")), devices[0] if devices else None)
+    if dev:
+        out["watch"] = dev.get("productDisplayName")
+        out["watch_measures"] = sorted(v for k, v in CAPABILITIES.items() if dev.get(k))
+        out["watch_cannot_measure"] = sorted(v for k, v in CAPABILITIES.items() if dev.get(k) is False) or None
+    return out
+
+
 # ---------------------------------------------------------------- daily metrics
 
 def fetch_day(day: str) -> dict:

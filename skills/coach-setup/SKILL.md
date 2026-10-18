@@ -28,23 +28,27 @@ the watch already knows doesn't need asking.
 
 ## 2. Garmin check and pre-fill (before asking anything)
 
-Call the garmin server. If it fails, see the connection notes in
-`../coach-core/references/garmin-data.md` and help them run the auth command.
-Then pull and summarize back to the athlete:
+Tell the athlete this takes a minute or two, then call `garmin_history()`
+(one call). It imports the last 12 weeks of activities and 60 days of
+recovery metrics into the database, so baselines and readiness work from
+day one, and returns:
 
-- `get_user_profile` / `get_userprofile_settings`: age, sex, height, weight, units
-- `get_devices`: watch model (decides which metrics exist, e.g. training readiness, HRV)
-- `get_activities_by_date` for the last 8-12 weeks: what they actually do,
-  how often, how long
-- strength: `get_activity_exercise_sets` on 2-3 recent sessions gives
-  lifts, loads, reps (and whether Garmin's labels are reliable)
-- endurance: `get_vo2max_trend`, `get_race_predictions`,
-  `get_lactate_threshold`, `get_heart_rate_zones`, `get_training_status`
-- recovery baseline: 60 days of HRV, RHR, sleep, Body Battery, stress.
-  Store them with `record_metrics` (backfill) so readiness works from day 1.
-- `get_weigh_ins`, and nutrition logs if any
+- `profile`: age, sex, height, weight, units, timezone, the watch, and
+  `watch_cannot_measure` (never ask Garmin for those or call them missing)
+- `training_last_weeks`: per sport, sessions/week, duration, usual days
+- `strength_top_exercises`: heaviest set and an e1RM floor per lift (sets
+  assumed to failure, so the real max is likely higher)
+- `strength_data_quality`: unclassified sets, whether effort is rated and
+  whether it varies
+- `recovery_baselines`, `garmin_endurance`, `body_weight`
 
-Present it as "Here's what I can see from your Garmin" and let them correct it.
+Present it as "Here's what I can see from your Garmin" in a few lines and
+let them correct it.
+
+If it fails with a Garmin login error, help them run the command it
+names. Garmin's heart rate zones and nutrition logs aren't in it; get them
+from the garmin server (`get_heart_rate_zones`, nutrition tools) if an
+endurance or nutrition goal needs them.
 
 ## 3. Conversation (one topic at a time, 1-3 questions per turn)
 

@@ -66,6 +66,17 @@ class FakeGarmin:
                             "monthlyLoadAerobicHigh": 700, "monthlyLoadAnaerobic": 150,
                             "trainingBalanceFeedbackPhrase": "BALANCED"}}}}
 
+    def get_user_profile(self):
+        return {"id": 1, "userData": {"gender": "MALE", "birthDate": "1995-01-27", "height": 175.0, "weight": 75500.0,
+                                      "measurementSystem": "metric", "availableTrainingDays": ["MONDAY", "FRIDAY"]}}
+
+    def get_userprofile_settings(self):
+        return {"measurementSystem": "metric", "timeZone": "Europe/Paris"}
+
+    def get_devices(self):
+        return [{"productDisplayName": "Venu 3S", "primary": True, "hrvStatusCapable": True,
+                 "trainingReadinessCapable": False, "bodyBatteryCapable": True, "sleepScoreCapable": True}]
+
     def get_race_predictions(self):
         return {"calendarDate": str(TODAY), "time5K": 1290, "time10K": 2700, "timeHalfMarathon": 6000,
                 "timeMarathon": 12900} if self.runner else {}
@@ -383,3 +394,27 @@ def test_validate_block(ws):
     assert "load jumps 90 -> 101kg" in warns
     assert "101kg isn't buildable on your barbell (nearest 100kg)" in warns or "isn't buildable" in warns
     assert ops.validate_block(root, "nope.yml")["ok"] is False
+
+
+def test_history(ws):
+    root, fake = ws
+    fake.activities = [{"activityId": 10 + i, "activityName": "Push", "activityType": {"typeKey": "strength_training"},
+                        "startTimeLocal": f"{TODAY - timedelta(days=7 * i)} 18:00:00", "duration": 3600}
+                       for i in range(4)] + \
+                      [{"activityId": 99, "activityName": "Run", "activityType": {"typeKey": "running"},
+                        "startTimeLocal": f"{TODAY - timedelta(days=2)} 07:00:00", "duration": 1800,
+                        "distance": 5000.0, "averageHR": 150}]
+    h = ops.history(root, weeks=4, backfill_days=30)
+    p = h["profile"]
+    assert p["sex"] == "male" and p["weight_kg"] == 75.5 and p["watch"] == "Venu 3S" and 30 <= p["age"] <= 32
+    assert "training_readiness" in p["watch_cannot_measure"] and "hrv_status" in p["watch_measures"]
+    sp = h["training_last_weeks"]["by_sport"]
+    assert sp["strength_training"]["sessions"] == 4 and sp["strength_training"]["per_week"] == 1.0
+    assert sp["running"] == {"sessions": 1, "per_week": 0.2, "avg_min": 30,
+                             "usual_days": [(TODAY - timedelta(days=2)).strftime("%a")], "avg_km": 5.0, "avg_hr": 150}
+    bench = h["strength_top_exercises"][0]
+    assert bench["exercise"] == "BARBELL_BENCH_PRESS" and bench["sessions"] == 4
+    assert bench["heaviest"].startswith("90kg x2") and bench["e1rm_floor"] > 90
+    assert h["strength_data_quality"]["unclassified_sets"] == 4 and h["strength_data_quality"]["effort_varies"] is False
+    assert "hrv_overnight_ms" in h["recovery_baselines"] and h["garmin_endurance"] is None
+    assert len(str(h)) < 3500

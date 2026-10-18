@@ -396,6 +396,16 @@ def push_week(block_id: str = "", week: int = 0, dates: dict | None = None, dry_
 
 
 @mcp.tool()
+def garmin_history(weeks: int = 12, backfill_days: int = 60) -> dict:
+    """THE first-setup Garmin pull in one call: profile (age, sex, height, weight, units, timezone),
+    watch model and which metrics it can measure, the last `weeks` of activities imported and
+    summarized per sport (sessions/week, duration, usual days), strength top exercises with
+    heaviest set and e1RM floor, effort-logging quality, `backfill_days` of recovery metrics stored
+    with the resulting baselines, endurance context, body weight. Slow (~1-2 min): say so first."""
+    return ops.history(_root(), weeks, backfill_days)
+
+
+@mcp.tool()
 def validate_block(block: str = "") -> dict:
     """Check a block yml before activating or pushing it: required fields, every session buildable
     for Garmin in every week (exercise keys, targets), reps/sets present, pct_1rm/RPE sane, loads
