@@ -113,15 +113,73 @@ def fetch_hrv_status(day: str) -> dict | None:
             "garmin_balanced_band": [b.get("balancedLow"), b.get("balancedUpper")]}
 
 
-def fetch_vo2max(day: str) -> dict:
-    ts = _safe(client().get_training_status, day) or {}
+def _device_record(by_device) -> dict:
+    """Garmin keys some training data by device id: prefer the primary training device."""
+    recs = [v for v in (by_device or {}).values() if isinstance(v, dict) and v]
+    return next((r for r in recs if r.get("primaryTrainingDevice")), recs[0] if recs else {})
+
+
+def _pace(mps: float | None) -> str | None:
+    if not mps:
+        return None
+    sec = round(1000 / mps)
+    return f"{sec // 60}:{sec % 60:02d}/km"
+
+
+def _hms(sec) -> str | None:
+    if not sec:
+        return None
+    sec = int(sec)
+    return f"{sec // 3600}:{sec % 3600 // 60:02d}:{sec % 60:02d}" if sec >= 3600 else f"{sec // 60}:{sec % 60:02d}"
+
+
+def fetch_endurance(day: str) -> dict:
+    """VO2max (stored as metrics) plus Garmin's endurance context: training status, acute/chronic
+    load, load balance, race predictions, lactate threshold, FTP. Empty sections are omitted, so a
+    strength-only athlete gets {}. Field names follow the garmin MCP server's curated parsers."""
+    g = client()
+    ts = _safe(g.get_training_status, day) or {}
+    out: dict = {"vo2max": {}, "context": {}}
     v = ts.get("mostRecentVO2Max") or {}
-    out = {}
-    for kind in ("generic", "cycling"):
-        k = v.get(kind) or {}
-        val = k.get("vo2MaxPreciseValue") or k.get("vo2MaxValue")
+    for kind, name in (("generic", "vo2max"), ("cycling", "vo2max_cycling")):
+        val = (v.get(kind) or {}).get("vo2MaxPreciseValue") or (v.get(kind) or {}).get("vo2MaxValue")
         if val:
-            out["vo2max" if kind == "generic" else "vo2max_cycling"] = val
+            out["vo2max"][name] = val
+    ctx = out["context"]
+    st = _device_record(((ts.get("mostRecentTrainingStatus") or {}).get("latestTrainingStatusData")))
+    acwr = st.get("acuteTrainingLoadDTO") or {}
+    status = {k: x for k, x in {
+        "status": st.get("trainingStatusFeedbackPhrase") or st.get("trainingStatus"),
+        "fitness_trend": st.get("fitnessTrend"),
+        "acute_load": acwr.get("dailyTrainingLoadAcute"), "chronic_load": acwr.get("dailyTrainingLoadChronic"),
+        "acute_chronic_ratio": acwr.get("dailyAcuteChronicWorkloadRatio"), "ratio_status": acwr.get("acwrStatus"),
+    }.items() if x is not None}
+    if status:
+        ctx["training_status"] = status
+    lb = _device_record(((ts.get("mostRecentTrainingLoadBalance") or {}).get("metricsTrainingLoadBalanceDTOMap")))
+    balance = {k: x for k, x in {
+        "feedback": lb.get("trainingBalanceFeedbackPhrase"),
+        "aerobic_low": lb.get("monthlyLoadAerobicLow"), "aerobic_high": lb.get("monthlyLoadAerobicHigh"),
+        "anaerobic": lb.get("monthlyLoadAnaerobic"),
+    }.items() if x is not None}
+    if balance:
+        ctx["load_balance_4wk"] = balance
+    rp = _safe(g.get_race_predictions) or {}
+    if isinstance(rp, list):
+        rp = rp[-1] if rp else {}
+    races = {k: _hms(rp.get(f)) for k, f in (("5k", "time5K"), ("10k", "time10K"),
+                                              ("half", "timeHalfMarathon"), ("marathon", "timeMarathon"))}
+    if any(races.values()):
+        ctx["race_predictions"] = {k: x for k, x in races.items() if x}
+    lt = _safe(g.get_lactate_threshold) or {}
+    shr, pw = lt.get("speed_and_heart_rate") or {}, lt.get("power") or {}
+    thr = {k: x for k, x in {
+        "lt_hr_bpm": shr.get("heartRate"),
+        "lt_pace": _pace(shr["speed"] * 10) if shr.get("speed") else None,  # raw unit is 0.1 m/s
+        "ftp_w": pw.get("functionalThresholdPower"),
+    }.items() if x is not None}
+    if thr:
+        ctx["thresholds"] = thr
     return out
 
 

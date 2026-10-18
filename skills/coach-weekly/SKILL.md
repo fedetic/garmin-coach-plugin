@@ -20,10 +20,14 @@ for the athlete's active goals.
     `unclassified_sets_total`
   - `recovery_7d_vs_baseline`, `repeated_deterioration`, `garmin_hrv_status`,
     `body_weight_avg`, `vo2max`, `goal_progress`, `open_injuries`
+  - `garmin_endurance` (only when the watch has it): training status,
+    acute/chronic load and ratio, 4-week load balance, race predictions,
+    lactate threshold HR/pace, FTP
   - `block`: week X of Y, exit criteria, cautions, and `next_week` sessions
     with their loads and whether each is already `on_garmin`
-- Endurance goals, if the garmin server is available: `get_training_status`,
-  `get_training_load_balance`, `get_race_predictions`, `get_running_tolerance`.
+- Endurance goals that need more history (running tolerance, a VO2max
+  trend), if the garmin server is available: `get_running_tolerance`,
+  `get_vo2max_trend`.
 - Ask the athlete only what the data can't tell you: missed sessions and
   why, pain/injury updates, RPE where Garmin's is missing or flat, sleep or
   life context, nutrition consistency. Ask once, batched.

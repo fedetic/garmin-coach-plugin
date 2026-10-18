@@ -49,8 +49,31 @@ class FakeGarmin:
         return {"hrvSummary": {"status": "UNBALANCED", "weeklyAvg": 47, "lastNightAvg": 40,
                                "baseline": {"balancedLow": 50, "balancedUpper": 60}}}
 
+    runner = False  # False: the empty shapes a strength-only account returns (probed 2026-10)
+
     def get_training_status(self, d):
-        return {"mostRecentVO2Max": None}
+        if not self.runner:
+            return {"userId": 1, "mostRecentVO2Max": None, "mostRecentTrainingLoadBalance": None,
+                    "mostRecentTrainingStatus": None, "heatAltitudeAcclimationDTO": None}
+        return {"mostRecentVO2Max": {"generic": {"vo2MaxValue": 52.0, "vo2MaxPreciseValue": 51.8}, "cycling": None},
+                "mostRecentTrainingStatus": {"latestTrainingStatusData": {
+                    "111": {"deviceId": 111, "primaryTrainingDevice": True, "trainingStatus": 4,
+                            "trainingStatusFeedbackPhrase": "PRODUCTIVE_3", "fitnessTrend": 1,
+                            "acuteTrainingLoadDTO": {"dailyTrainingLoadAcute": 640, "dailyTrainingLoadChronic": 520,
+                                                     "dailyAcuteChronicWorkloadRatio": 1.2, "acwrStatus": "OPTIMAL"}}}},
+                "mostRecentTrainingLoadBalance": {"metricsTrainingLoadBalanceDTOMap": {
+                    "111": {"deviceId": 111, "primaryTrainingDevice": True, "monthlyLoadAerobicLow": 900,
+                            "monthlyLoadAerobicHigh": 700, "monthlyLoadAnaerobic": 150,
+                            "trainingBalanceFeedbackPhrase": "BALANCED"}}}}
+
+    def get_race_predictions(self):
+        return {"calendarDate": str(TODAY), "time5K": 1290, "time10K": 2700, "timeHalfMarathon": 6000,
+                "timeMarathon": 12900} if self.runner else {}
+
+    def get_lactate_threshold(self):
+        return {"speed_and_heart_rate": {"speed": 0.3703, "heartRate": 171, "calendarDate": str(TODAY)},
+                "power": {}} if self.runner else \
+            {"speed_and_heart_rate": {"speed": None, "heartRate": None}, "power": {}}
 
     def get_activities_by_date(self, a, b):
         return [x for x in self.activities if a <= x["startTimeLocal"][:10] <= b]
@@ -233,6 +256,21 @@ def test_sync_since_summary(ws):
     nxt = {x["id"]: x for x in blk["next_week"]}
     assert nxt["today_lift"]["exercises"][0] == "Barbell Bench Press 2x2 @95kg RPE7.5"
     assert nxt["today_lift"]["on_garmin"] is False
+
+
+def test_sync_since_endurance(ws):
+    root, fake = ws
+    start = (TODAY - timedelta(days=6)).isoformat()
+    assert ops.sync_since(root, start)["garmin_endurance"] is None  # strength-only: no noise
+    fake.runner = True
+    out = ops.sync_since(root, start)
+    e = out["garmin_endurance"]
+    assert out["vo2max"] == {"vo2max": 51.8}
+    assert e["training_status"]["status"] == "PRODUCTIVE_3" and e["training_status"]["ratio_status"] == "OPTIMAL"
+    assert e["race_predictions"] == {"5k": "21:30", "10k": "45:00", "half": "1:40:00", "marathon": "3:35:00"}
+    assert e["thresholds"] == {"lt_hr_bpm": 171, "lt_pace": "4:30/km"}
+    assert e["load_balance_4wk"]["feedback"] == "BALANCED"
+    assert db.query(root, "SELECT value FROM health_metrics WHERE metric='acute_load'")[0]["value"] == 640
 
 
 def test_garmin_sync_since_tool_adds_proposal(ws):

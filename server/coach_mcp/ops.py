@@ -289,9 +289,11 @@ def sync_since(root: Path, start: str = "", end: str = "") -> dict:
     m = sync_metrics(con, (date.fromisoformat(start) - timedelta(days=1)).isoformat(), end,
                      refresh_from=(end_d - timedelta(days=1)).isoformat())
     sync_activities(con, start, end)
-    vo2 = gl.fetch_vo2max(end)
-    if vo2:
-        store_metrics(con, [{"date": end, "metric": k, "value": v} for k, v in vo2.items()])
+    endu = gl.fetch_endurance(end)
+    vo2 = endu["vo2max"]
+    acute = (endu["context"].get("training_status") or {}).get("acute_load")
+    store_metrics(con, [{"date": end, "metric": k, "value": v} for k, v in vo2.items()] +
+                  ([{"date": end, "metric": "acute_load", "value": acute}] if acute is not None else []))
 
     planned = [dict(r) for r in con.execute(
         "SELECT garmin_workout_id, name, block_id, week, session, scheduled_date FROM garmin_workouts "
@@ -357,6 +359,7 @@ def sync_since(root: Path, start: str = "", end: str = "") -> dict:
         "body_weight_avg": {"last_7d": w_now, "prev_7d": w_prev,
                             "change": round(w_now - w_prev, 2) if w_now and w_prev else None},
         "vo2max": vo2 or None,
+        "garmin_endurance": endu["context"] or None,
         "open_injuries": [dict(r) for r in con.execute(
             "SELECT area, status, severity FROM injuries WHERE status != 'resolved'")] or None,
         "block": _block_outlook(root, con, end_d),
