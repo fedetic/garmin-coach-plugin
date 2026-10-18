@@ -278,8 +278,11 @@ about 500 tokens) and spends its effort on judgment and talking to you.
 
 **What to expect on 16 GB of VRAM**
 
-- Use a model with solid tool calling at 4-bit, e.g. a Qwen3 14B-class or
-  gpt-oss-20b-class model, and leave room for a 32k context.
+- **Recommended: Qwen3 14B at 4-bit** (`ollama pull qwen3:14b`; the default
+  tag is 4-bit, about 9 GB). It calls tools reliably and leaves room on a
+  16 GB card for a 32k context. A gpt-oss-20b-class model is an alternative
+  if it fits alongside your context. Not yet benchmarked with the coach, so
+  treat this as a starting point.
 - Daily checks, weekly check-ins and pushing workouts are the flows small
   models handle well. Writing a whole new training block is the hardest
   task: `validate_block` catches mechanical mistakes and the model must fix
