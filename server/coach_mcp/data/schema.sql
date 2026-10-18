@@ -39,7 +39,8 @@ CREATE TABLE IF NOT EXISTS body_metrics (
 CREATE TABLE IF NOT EXISTS workouts (
   id INTEGER PRIMARY KEY, garmin_activity_id TEXT UNIQUE, date TEXT, name TEXT,
   sport TEXT, duration_sec REAL, distance_m REAL, avg_hr REAL, max_hr REAL,
-  calories REAL, rpe REAL, feel REAL, block_id TEXT, notes TEXT
+  calories REAL, rpe REAL, feel REAL, block_id TEXT, notes TEXT,
+  garmin_workout_id TEXT       -- the planned Garmin workout this session was started from
 );
 
 CREATE TABLE IF NOT EXISTS workout_sets (
@@ -89,5 +90,6 @@ CREATE TABLE IF NOT EXISTS checkins (
 CREATE TABLE IF NOT EXISTS garmin_workouts (
   id INTEGER PRIMARY KEY, garmin_workout_id TEXT NOT NULL, name TEXT, block_id TEXT,
   week INTEGER, session TEXT, scheduled_date TEXT, status TEXT DEFAULT 'scheduled',
+  payload_hash TEXT,           -- lets push_week reuse an unchanged template
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );

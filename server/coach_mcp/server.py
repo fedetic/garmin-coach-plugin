@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 import yaml
 from mcp.server.fastmcp import FastMCP
 
-from . import calc, db, garmin, readiness, workspace
+from . import calc, db, garmin, ops, readiness, workspace
 
 mcp = FastMCP("coach")
 
@@ -135,22 +135,9 @@ def record_metrics(rows: list[dict]) -> dict:
     sleep_score, body_battery_morning, stress_avg, training_readiness, vo2max, acute_load, steps.
     Body weight: metric 'weight_kg' (and optional 'body_fat_pct') goes to body_metrics.
     Never invent values - skip a metric Garmin didn't return."""
-    con = _con()
-    health, body = [], {}
-    for r in rows:
-        if r.get("value") is None:
-            continue
-        if r["metric"] in ("weight_kg", "body_fat_pct"):
-            body.setdefault(r["date"], {"date": r["date"], "source": r.get("source", "garmin")})[r["metric"]] = r["value"]
-        else:
-            unit = r.get("unit") or readiness.METRICS.get(r["metric"], ("",))[0]
-            health.append({"date": r["date"], "metric": r["metric"], "value": r["value"], "unit": unit,
-                           "source": r.get("source", "garmin")})
-    n = db.upsert(con, "health_metrics", health, ["date", "metric"]) if health else 0
-    m = db.upsert(con, "body_metrics", list(body.values()), ["date", "source"]) if body else 0
-    unknown = sorted({h["metric"] for h in health} - set(readiness.METRICS))
-    return {"health_rows": n, "body_rows": m,
-            "non_canonical_metrics": unknown or None}
+    out = ops.store_metrics(_con(), rows)
+    unknown = sorted({r["metric"] for r in rows} - set(readiness.METRICS) - set(ops.BODY))
+    return {**out, "non_canonical_metrics": unknown or None}
 
 
 @mcp.tool()
@@ -364,6 +351,43 @@ def goal_progress(weeks: int = 8) -> list[dict]:
                                   "make this a rough indication, not a forecast")
         out.append(item)
     return out
+
+
+# ---------------------------------------------------------------- compound (fetch Garmin directly)
+
+@mcp.tool()
+def garmin_daily_snapshot(date: str = "", backfill_days: int = 0) -> dict:
+    """THE daily check in one call. Fetches last night's Garmin recovery data (and any days missing
+    from the last week), stores it, compares every factor to the athlete's own baseline, imports
+    yesterday's/today's activities, and returns today's planned session from the active block plus
+    what is on the Garmin calendar. Compact output - no raw Garmin JSON.
+    backfill_days: use 60 on first setup so baselines exist from day one (slow: ~3 Garmin calls/day)."""
+    return ops.daily_snapshot(_root(), date, backfill_days)
+
+
+@mcp.tool()
+def garmin_sync_since(start_date: str = "", end_date: str = "") -> dict:
+    """THE weekly data pull in one call. Imports every activity (strength sets parsed server-side,
+    effort/feel ratings), backfills daily metrics and VO2max, then returns a compact summary:
+    adherence (planned vs done vs missed), per-session sets/duration/effort, effort-logging quality,
+    unclassified sets, recovery 7-day vs baseline, Garmin HRV status, body-weight change, goal progress.
+    Defaults: start = last weekly check-in (or 7 days ago), end = today."""
+    out = ops.sync_since(_root(), start_date, end_date)
+    out["goal_progress"] = goal_progress()
+    return out
+
+
+@mcp.tool()
+def push_week(block_id: str = "", week: int = 0, dates: dict | None = None, dry_run: bool = False,
+              include_past: bool = False) -> dict:
+    """Turn a block yml week into Garmin workouts in one call: builds every strength session
+    (that week's sets/reps/loads), uploads it, verifies the stored workout matches the plan
+    step by step (removes it again if not), schedules it, replaces and deletes the coach's old
+    version, and records it. Unchanged sessions keep their existing template.
+    Defaults: active block, current week. dates: {session_id: YYYY-MM-DD} to move sessions.
+    Run with dry_run=true first when unsure; past dates are skipped unless include_past.
+    Edit the block yml BEFORE calling - the yml is the source of truth."""
+    return ops.push_week(_root(), block_id, week, dates, dry_run, include_past)
 
 
 def main():

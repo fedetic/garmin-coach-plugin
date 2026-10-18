@@ -8,7 +8,13 @@ import sqlite3
 from pathlib import Path
 
 SCHEMA = Path(__file__).parent / "data" / "schema.sql"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+
+# Columns added after v1: (table, column, type). Applied to existing databases on connect.
+ADDED_COLUMNS = [
+    ("workouts", "garmin_workout_id", "TEXT"),
+    ("garmin_workouts", "payload_hash", "TEXT"),
+]
 
 ENUMS = {
     ("observations", "type"): {"fact", "calculation", "interpretation", "hypothesis", "decision"},
@@ -36,7 +42,19 @@ def connect(root: Path) -> sqlite3.Connection:
         con.executescript(SCHEMA.read_text())
         con.execute("INSERT INTO schema_version VALUES (?)", (SCHEMA_VERSION,))
         con.commit()
+    else:
+        _migrate(con)
     return con
+
+
+def _migrate(con: sqlite3.Connection) -> None:
+    for table, col, typ in ADDED_COLUMNS:
+        if col not in [r["name"] for r in con.execute(f"PRAGMA table_info({table})")]:
+            con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")
+    if con.execute("SELECT max(version) FROM schema_version").fetchone()[0] != SCHEMA_VERSION:
+        con.execute("DELETE FROM schema_version")
+        con.execute("INSERT INTO schema_version VALUES (?)", (SCHEMA_VERSION,))
+    con.commit()
 
 
 def columns(con: sqlite3.Connection, table: str) -> list[str]:
