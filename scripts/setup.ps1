@@ -40,6 +40,8 @@ function Install-GitDirect {
     if (-not $asset) { return $false }
     $exe = Join-Path $env:TEMP $asset.name
     Write-Host "  downloading $($asset.name) ..."
+    # the progress bar makes downloads many times slower in Windows PowerShell 5.1
+    $ProgressPreference = "SilentlyContinue"
     Invoke-WebRequest $asset.browser_download_url -OutFile $exe -UseBasicParsing
     Start-Process $exe -Wait -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-", "/CURRENTUSER"
     Remove-Item $exe -ErrorAction SilentlyContinue
