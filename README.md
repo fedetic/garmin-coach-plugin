@@ -95,9 +95,9 @@ read [Local models](#local-models-opencode) first.
 The script walks through 6 steps and skips anything that's already done, so
 it's safe to run again if something fails halfway:
 
-1. **git**: needed to download the Garmin connector (Windows: installed via winget; Mac: the developer-tools popup)
+1. **git**: needed to download the Garmin connector (Windows: installed via winget, or straight from Git for Windows if winget is missing; Mac: the developer-tools popup)
 2. **uv**: runs the coach and Garmin servers, and installs Python by itself
-3. **Claude Code** (or checks that Codex or opencode is there)
+3. **Claude Code** (or checks that Codex or opencode is there; on Windows it offers to install them, plus Node.js, and asks before allowing PowerShell to run them)
 4. **The garmin-coach plugin**
 5. **Garmin Connect login**: your email, password and MFA code if you use one. Only a login token is saved, in `~/.garminconnect` on your computer, and it lasts about 6 months.
 6. **Your coaching folder**: `~/coach`

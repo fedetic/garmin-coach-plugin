@@ -13,6 +13,8 @@ $Tool = if ($env:COACH_TOOL -in @("codex", "opencode")) { $env:COACH_TOOL } else
 $Repo = "https://github.com/fedetic/garmin-coach-plugin.git"
 $PluginDir = Join-Path $HOME ".garmin-coach\plugin"     # Codex and opencode
 $Workspace = Join-Path $HOME "coach"
+$NodeDir = Join-Path $env:LOCALAPPDATA "Programs\nodejs"   # only used if setup installs Node.js
+$Launch = $Tool                                             # what to type to start the AI tool
 # pinned to a reviewed commit: the login tool sees your password, the server your token
 $GarminMcp = "git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52"
 
@@ -24,7 +26,8 @@ function Refresh-Path {
   # registry PATH plus the folders installers use, in case PATH isn't updated yet
   $extra = @((Join-Path $HOME ".local\bin"),
              (Join-Path $env:ProgramFiles "Git\cmd"),
-             (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd")) | Where-Object { Test-Path $_ }
+             (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd"),
+             $NodeDir, (Join-Path $env:APPDATA "npm")) | Where-Object { Test-Path $_ }
   $env:Path = (@([Environment]::GetEnvironmentVariable("Path", "Machine"),
                  [Environment]::GetEnvironmentVariable("Path", "User")) + $extra) -join ";"
 }
@@ -47,6 +50,42 @@ function Install-GitDirect {
     Remove-Item $exe -ErrorAction SilentlyContinue
     return $true
   } catch { Write-Host "  direct download failed: $($_.Exception.Message)"; return $false }
+}
+
+function Ask($q) {
+  $a = Read-Host "  $q [Y/n]"
+  return ($a.Trim() -eq "" -or $a.Trim() -match "^(y|yes)$")
+}
+
+# Node.js LTS as a portable zip in the user's folder: no admin, no winget needed.
+# npm then puts global commands (codex, opencode) in that same folder.
+function Install-Node {
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $ProgressPreference = "SilentlyContinue"
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "x64" }
+    # assigned first: Invoke-RestMethod sends a JSON array down the pipe as one object
+    $releases = Invoke-RestMethod "https://nodejs.org/dist/index.json" -UseBasicParsing
+    $lts = $releases | Where-Object { $_.lts -and $_.files -contains "win-$arch-zip" } | Select-Object -First 1
+    $name = "node-$($lts.version)-win-$arch"
+    $zip = Join-Path $env:TEMP "$name.zip"
+    Write-Host "  downloading Node.js $($lts.version) ..."
+    Invoke-WebRequest "https://nodejs.org/dist/$($lts.version)/$name.zip" -OutFile $zip -UseBasicParsing
+    $tmp = Join-Path $env:TEMP "node-extract"
+    Remove-Item $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $tmp | Out-Null
+    if (Has tar) { tar -xf $zip -C $tmp } else { Expand-Archive $zip $tmp -Force }
+    Remove-Item $NodeDir -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path (Split-Path $NodeDir) | Out-Null
+    Move-Item (Join-Path $tmp $name) $NodeDir
+    Remove-Item $zip, $tmp -Recurse -Force -ErrorAction SilentlyContinue
+    # on the user's PATH for new windows too
+    $userPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if (($userPath -split ";") -notcontains $NodeDir) {
+      [Environment]::SetEnvironmentVariable("Path", (@($userPath, $NodeDir) | Where-Object { $_ }) -join ";", "User")
+    }
+    return (Test-Path (Join-Path $NodeDir "node.exe"))
+  } catch { Write-Host "  Node.js download failed: $($_.Exception.Message)"; return $false }
 }
 
 Step "1/6" "git"
@@ -87,12 +126,35 @@ if ($Tool -eq "claude") {
     Refresh-Path
     if (Has claude) { Ok "Claude Code installed" } else { Fail "claude not on PATH - open a new PowerShell and run setup again." }
   }
-} elseif ($Tool -eq "codex") {
-  if (Has codex) { Ok "Codex found" }
-  else { Fail "Codex is not installed. Install it (https://developers.openai.com/codex/cli), then run this setup again." }
 } else {
-  if (Has opencode) { Ok "opencode found" }
-  else { Fail "opencode is not installed. Install it (https://opencode.ai, e.g. npm install -g opencode-ai), then run this setup again." }
+  $Pkg = if ($Tool -eq "codex") { "@openai/codex" } else { "opencode-ai" }
+  if (Has $Tool) { Ok "$Tool found" }
+  else {
+    Write-Host "  $Tool is not installed. Setup can install it for you:"
+    if (-not (Has node)) { Write-Host "   - Node.js LTS, for your user only (no admin needed)" }
+    Write-Host "   - $Tool (npm install -g $Pkg)"
+    if (-not (Ask "Install now?")) { Fail "install $Tool yourself (npm install -g $Pkg), then run this setup again." }
+    if (-not (Has node)) {
+      if (Install-Node) { Refresh-Path; Ok "Node.js installed" } else { Fail "could not install Node.js. Install the LTS version from https://nodejs.org, then run this setup again." }
+    }
+    npm.cmd install -g $Pkg    # npm.cmd: npm.ps1 is blocked until scripts are allowed
+    Refresh-Path
+    if (Has $Tool) { Ok "$Tool installed" } else { Fail "$Tool install failed (see message above)." }
+  }
+  # npm installs commands as PowerShell scripts, which Windows blocks by default
+  if ((Get-Command $Tool -All | Where-Object CommandType -eq ExternalScript) -and
+      (Get-ExecutionPolicy) -in @("Restricted", "AllSigned", "Undefined")) {
+    Write-Host "  Windows blocks running '$Tool' from PowerShell until scripts are allowed for your user:"
+    Write-Host "    Set-ExecutionPolicy -Scope CurrentUser RemoteSigned"
+    Write-Host "  (scripts made on this computer may run; downloaded scripts must be signed)"
+    if (Ask "Allow it?") {
+      try { Set-ExecutionPolicy -Scope CurrentUser RemoteSigned -Force -ErrorAction Stop } catch { }
+    }
+    if ((Get-ExecutionPolicy) -in @("Restricted", "AllSigned", "Undefined")) {
+      $Launch = "$Tool.cmd"
+      Ok "scripts stay blocked - start it with '$Launch' instead of '$Tool'"
+    } else { Ok "scripts allowed for your user" }
+  }
 }
 
 Step "4/6" "garmin-coach plugin"
@@ -141,7 +203,7 @@ Write-Host ""
 Write-Host "All set. Start coaching:" -ForegroundColor Green
 Write-Host ""
 Write-Host "    cd ~\coach"
-Write-Host "    $Tool"
+Write-Host "    $Launch"
 Write-Host ""
 Write-Host "Then type:   set me up as a new athlete"
 if ($Tool -eq "claude") { Write-Host "(First time? Claude Code asks you to log in - a Claude Pro or Max plan is needed.)" }
