@@ -197,7 +197,7 @@ def _compact_readiness(rep: dict) -> dict:
     return out
 
 
-def _readiness(root: Path, day: str) -> dict:
+def readiness_on(root: Path, day: str) -> dict:
     start = (date.fromisoformat(day) - timedelta(days=70)).isoformat()
     rows = db.query(root, "SELECT date, metric, value FROM health_metrics WHERE date >= ?", [start], limit=100000)
     return readiness.assess(rows, day)
@@ -212,7 +212,7 @@ def daily_snapshot(root: Path, day: str = "", backfill_days: int = 0) -> dict:
     yesterday = (d - timedelta(days=1)).isoformat()
     sync = sync_metrics(con, (d - timedelta(days=days_back)).isoformat(), d.isoformat(), refresh_from=yesterday)
     new_acts = sync_activities(con, yesterday, d.isoformat())
-    rep = _readiness(root, d.isoformat())
+    rep = readiness_on(root, d.isoformat())
 
     row, block = _active_block(root, con)
     plan, todays = None, []
@@ -339,10 +339,13 @@ def sync_since(root: Path, start: str = "", end: str = "") -> dict:
     w_now = wavg((end_d - timedelta(days=6)).isoformat(), end)
     w_prev = wavg((end_d - timedelta(days=13)).isoformat(), (end_d - timedelta(days=7)).isoformat())
 
-    rep = _readiness(root, end)
+    rep = readiness_on(root, end)
+    done_planned = len(done_ids & {p["garmin_workout_id"] for p in planned})
+    due = done_planned + len(missed)  # today's session isn't missed yet
     return {
         "range": [start, end],
-        "adherence": {"planned": len(planned), "done_as_planned": len(done_ids & {p["garmin_workout_id"] for p in planned}),
+        "adherence": {"planned": len(planned), "done_as_planned": done_planned,
+                      "rate": round(done_planned / due, 2) if due else None,
                       "missed": missed or None, "total_sessions": len(acts)},
         "sessions": sessions,
         "effort_logging": rpe_note,
@@ -353,8 +356,105 @@ def sync_since(root: Path, start: str = "", end: str = "") -> dict:
         "body_weight_avg": {"last_7d": w_now, "prev_7d": w_prev,
                             "change": round(w_now - w_prev, 2) if w_now and w_prev else None},
         "vo2max": vo2 or None,
+        "open_injuries": [dict(r) for r in con.execute(
+            "SELECT area, status, severity FROM injuries WHERE status != 'resolved'")] or None,
+        "block": _block_outlook(root, con, end_d),
         "sync": {"metric_days_fetched": m["days_fetched"], "activities": len(acts)},
     }
+
+
+def _block_outlook(root: Path, con, day: date) -> dict | None:
+    """Where the active block stands, and next week's sessions with their Garmin push status."""
+    row, block = _active_block(root, con)
+    if not block:
+        return None
+    week = week_of(block, row, day) or 1
+    nxt = week + 1
+    dur = block.get("duration_weeks")
+    pushed = {r["session"] for r in con.execute(
+        "SELECT session FROM garmin_workouts WHERE block_id=? AND week=? AND status='scheduled'",
+        (block.get("id"), nxt))}
+    sessions = []
+    if not dur or nxt <= dur:
+        for sess in block.get("sessions", []):
+            when = session_date(block, row, sess, nxt)
+            sessions.append({**session_summary(sess, nxt), "date": when.isoformat() if when else None,
+                             "on_garmin": sess.get("id") in pushed})
+    return {"id": block.get("id"), "name": block.get("name"), "week": week, "of_weeks": dur,
+            "ends_after_this_week": bool(dur and week >= dur),
+            "exit_criteria": block.get("exit_criteria") or None, "cautions": block.get("cautions") or None,
+            "next_week": sessions or None}
+
+
+WEEKLY_STATUS = ["AHEAD", "ON TRACK", "SLIGHTLY BEHIND", "SIGNIFICANTLY BEHIND", "AT RISK"]
+
+
+def propose_weekly(summary: dict, rep: dict, goals: list[dict], today: date | None = None) -> dict:
+    """Draft weekly status + risk from data only (adherence, goal trends, recovery, injuries).
+    Athlete-reported context (pain, illness, life) is not known here, so it is a draft."""
+    today = today or date.today()
+    rec = {m: rep["factors"][m] for m in readiness.RECOVERY if m in rep["factors"]}
+    orange_7d = [m for m, f in rec.items() if f.get("flag_7d") == "ORANGE"]
+    yellow_7d = [m for m, f in rec.items() if f.get("flag_7d") == "YELLOW"]
+    repeated = [m for m in rep["summary"]["repeated_deterioration"] if m in rec]
+    injuries = summary.get("open_injuries") or []
+    active_inj = [i["area"] for i in injuries if i["status"] == "active"]
+
+    why_risk = []
+    if len(orange_7d) >= 2 or len(repeated) >= 2 or active_inj:
+        risk = "ORANGE"
+        why_risk += [f"7-day ORANGE: {', '.join(orange_7d)}"] if len(orange_7d) >= 2 else []
+        why_risk += [f"3+ bad days in 7: {', '.join(repeated)}"] if len(repeated) >= 2 else []
+        why_risk += [f"active injury: {', '.join(active_inj)}"] if active_inj else []
+    elif orange_7d or len(yellow_7d) >= 2 or repeated or injuries:
+        risk = "YELLOW"
+        why_risk += [f"7-day ORANGE: {', '.join(orange_7d)}"] if orange_7d else []
+        why_risk += [f"7-day YELLOW: {', '.join(yellow_7d)}"] if len(yellow_7d) >= 2 else []
+        why_risk += [f"3+ bad days in 7: {', '.join(repeated)}"] if repeated else []
+        why_risk += [f"injury being monitored: {', '.join(i['area'] for i in injuries)}"] if injuries else []
+    else:
+        risk = "GREEN"
+        why_risk.append("recovery near baseline, no open injuries")
+
+    rate = summary["adherence"]["rate"]
+    away, late, early, measured = [], [], [], 0
+    for g in goals:
+        slope, rem = g.get("trend_per_week"), g.get("remaining")
+        if slope is None or rem is None:
+            continue
+        measured += 1
+        if rem and slope and (rem > 0) != (slope > 0):
+            away.append(g["goal"])
+        elif g.get("target_date") and g.get("naive_weeks_to_target") is not None:
+            left = (date.fromisoformat(str(g["target_date"])[:10]) - today).days / 7
+            if g["naive_weeks_to_target"] > left:
+                late.append(g["goal"])
+            elif g["naive_weeks_to_target"] < 0.8 * left:
+                early.append(g["goal"])
+
+    why = []
+    if rate is None and not measured:
+        status = None
+        why.append("no planned sessions due and no goal with a measured trend - classify from the conversation")
+    elif risk == "ORANGE" and ((rate is not None and rate < 0.5) or away):
+        status = "AT RISK"
+    elif (rate is not None and rate < 0.5) or away:
+        status = "SIGNIFICANTLY BEHIND"
+    elif (rate is not None and rate < 0.8) or late:
+        status = "SLIGHTLY BEHIND"
+    elif measured and early and not late and len(early) == measured and (rate is None or rate >= 0.8):
+        status = "AHEAD"
+    else:
+        status = "ON TRACK"
+    if rate is not None:
+        why.append(f"adherence {rate:.0%} of due planned sessions")
+    why += [f"moving away from target: {', '.join(away)}"] if away else []
+    why += [f"projected after target date: {', '.join(late)}"] if late else []
+    why += [f"projected well before target date: {', '.join(early)}"] if early else []
+    return {"status": status, "risk": risk, "status_reasons": why, "risk_reasons": why_risk,
+            "not_checked": "pain, illness, life stress, sessions done without starting the Garmin workout, "
+                           "goals without an automatic series (skills, race times) - ask and adjust; "
+                           "RED risk comes only from reported red-flag symptoms"}
 
 
 # ---------------------------------------------------------------- 3. push week

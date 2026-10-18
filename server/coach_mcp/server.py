@@ -324,7 +324,7 @@ def goal_progress(weeks: int = 8) -> list[dict]:
     cutoff = (date.today() - timedelta(weeks=weeks)).isoformat()
     for g in goals:
         item = {"goal": g["name"], "metric": g["metric"], "target": g["target_value"], "unit": g["unit"],
-                "baseline": g["baseline_value"]}
+                "baseline": g["baseline_value"], "target_date": g["target_date"]}
         series = _goal_series(g["metric"] or "")
         if not series:
             item["status"] = "manual - no automatic series for this metric"
@@ -370,11 +370,15 @@ def garmin_sync_since(start_date: str = "", end_date: str = "") -> dict:
     """THE weekly data pull in one call. Imports every activity (strength sets parsed server-side,
     effort/feel ratings), backfills daily metrics and VO2max, then returns a compact summary:
     adherence (planned vs done vs missed), per-session sets/duration/effort, effort-logging quality,
-    unclassified sets, recovery 7-day vs baseline, Garmin HRV status, body-weight change, goal progress.
+    unclassified sets, recovery 7-day vs baseline, Garmin HRV status, body-weight change, goal progress,
+    open injuries, block week + exit criteria + next week's sessions (and whether they're on Garmin).
+    `proposed` drafts status (AHEAD..AT RISK) and risk (GREEN..ORANGE) from the data - confirm or
+    override after asking the athlete what the data can't show.
     Defaults: start = last weekly check-in (or 7 days ago), end = today."""
     out = ops.sync_since(_root(), start_date, end_date)
     out["goal_progress"] = goal_progress()
-    return out
+    proposed = ops.propose_weekly(out, ops.readiness_on(_root(), out["range"][1]), out["goal_progress"])
+    return {"range": out.pop("range"), "proposed": proposed, **out}
 
 
 @mcp.tool()

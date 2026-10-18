@@ -218,6 +218,46 @@ def test_sync_since_summary(ws):
     assert sess["unclassified_sets"] == 1 and sess["rpe"] == 8.0
     assert out["garmin_hrv_status"]["status"] == "UNBALANCED"
     assert "rated 1/1" in out["effort_logging"]
+    assert out["adherence"]["rate"] == 1.0
+    assert out["open_injuries"] == [{"area": "left shoulder", "status": "monitoring", "severity": None}]
+    blk = out["block"]
+    assert blk["week"] == 1 and not blk["ends_after_this_week"]
+    nxt = {x["id"]: x for x in blk["next_week"]}
+    assert nxt["today_lift"]["exercises"][0] == "Barbell Bench Press 2x2 @95kg RPE7.5"
+    assert nxt["today_lift"]["on_garmin"] is False
+
+
+def test_garmin_sync_since_tool_adds_proposal(ws):
+    from coach_mcp import server
+    root, fake = ws
+    out = server.garmin_sync_since((TODAY - timedelta(days=6)).isoformat())
+    assert list(out)[:2] == ["range", "proposed"]
+    # HRV/sleep bad for 3 days + monitored shoulder; nothing planned, no goals -> no status draft
+    assert out["proposed"]["risk"] in ("YELLOW", "ORANGE") and out["proposed"]["status"] is None
+
+
+def _weekly(rate, injuries=None, **flags):
+    return {"adherence": {"rate": rate}, "open_injuries": injuries}, _rep(**flags)
+
+
+@pytest.mark.parametrize("rate,goals,flags,injuries,status,risk", [
+    (1.0, [], {}, None, "ON TRACK", "GREEN"),
+    (0.7, [], {}, None, "SLIGHTLY BEHIND", "GREEN"),
+    (0.4, [], {}, None, "SIGNIFICANTLY BEHIND", "GREEN"),
+    (0.4, [], {}, [{"area": "knee", "status": "active"}], "AT RISK", "ORANGE"),
+    (1.0, [{"goal": "bench", "remaining": 10, "trend_per_week": -1}], {}, None, "SIGNIFICANTLY BEHIND", "GREEN"),
+    (1.0, [{"goal": "bench", "remaining": 10, "trend_per_week": 1, "naive_weeks_to_target": 10,
+            "target_date": (TODAY + timedelta(weeks=5)).isoformat()}], {}, None, "SLIGHTLY BEHIND", "GREEN"),
+    (0.9, [{"goal": "bench", "remaining": 10, "trend_per_week": 2, "naive_weeks_to_target": 5,
+            "target_date": (TODAY + timedelta(weeks=20)).isoformat()}], {}, None, "AHEAD", "GREEN"),
+    (1.0, [], {"hrv_overnight_ms": ("GREEN", "ORANGE")}, None, "ON TRACK", "YELLOW"),
+    (1.0, [], {"hrv_overnight_ms": ("GREEN", "ORANGE"), "sleep_hours": ("GREEN", "ORANGE")}, None, "ON TRACK", "ORANGE"),
+    (None, [], {}, None, None, "GREEN"),
+])
+def test_propose_weekly_rules(rate, goals, flags, injuries, status, risk):
+    summary, rep = _weekly(rate, injuries, **flags)
+    out = ops.propose_weekly(summary, rep, goals, TODAY)
+    assert (out["status"], out["risk"]) == (status, risk), out
 
 
 def test_old_database_migrates(tmp_path):

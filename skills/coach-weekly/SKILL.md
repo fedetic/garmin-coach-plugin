@@ -10,21 +10,29 @@ for the athlete's active goals.
 
 ## 1. Gather (never fabricate; report gaps)
 
-- `workspace_status`, `journal/context.md`, the active block yml (this
-  week's and next week's prescriptions, exit criteria, cautions).
-- Garmin, since the last weekly check-in:
-  - activities (`get_activities_by_date`): for each, `import_activity`
-    (strength: with `get_activity_exercise_sets`; also `workout_rpe`/`feel`
-    from `get_activity`)
-  - daily recovery metrics for every day missing in the db: `record_metrics`
-  - weight (`get_weigh_ins`) and nutrition logs if any
-  - endurance goals: `get_vo2max_trend`, `get_training_status`,
-    `get_training_load_balance`, `get_race_predictions`, `get_running_tolerance`
-- Coach server: `readiness_report()`, `training_summary(week_start, today)`
-  and the same for the previous week, and `goal_progress()`.
+- `workspace_status` and `journal/context.md` (open questions from last time).
+- `garmin_sync_since()` (one call; defaults to everything since the last
+  weekly check-in). It imports the week's activities (strength sets parsed),
+  backfills recovery metrics and VO2max, and returns:
+  - `proposed`: draft **status** and **risk** with the reasons behind them
+  - `adherence` (planned vs done, `rate`, `missed`), `sessions` (sets,
+    loads, duration, effort per session), `effort_logging` quality,
+    `unclassified_sets_total`
+  - `recovery_7d_vs_baseline`, `repeated_deterioration`, `garmin_hrv_status`,
+    `body_weight_avg`, `vo2max`, `goal_progress`, `open_injuries`
+  - `block`: week X of Y, exit criteria, cautions, and `next_week` sessions
+    with their loads and whether each is already `on_garmin`
+- Endurance goals, if the garmin server is available: `get_training_status`,
+  `get_training_load_balance`, `get_race_predictions`, `get_running_tolerance`.
 - Ask the athlete only what the data can't tell you: missed sessions and
   why, pain/injury updates, RPE where Garmin's is missing or flat, sleep or
   life context, nutrition consistency. Ask once, batched.
+
+If `garmin_sync_since` fails with a Garmin login error, tell the athlete the
+fix it names. With the garmin server available, fall back to
+`get_activities_by_date` + `import_activity`, `record_metrics`,
+`readiness_report()`, `training_summary(week_start, today)` and
+`goal_progress()`.
 
 ## 2. Analyse
 
@@ -38,7 +46,12 @@ for the athlete's active goals.
 
 Classify **status**: AHEAD / ON TRACK / SLIGHTLY BEHIND / SIGNIFICANTLY
 BEHIND / AT RISK. Classify **risk**: GREEN / YELLOW / ORANGE / RED (Injury-Risk
-role, multiple indicators).
+role, multiple indicators). Start from `proposed`: it applies adherence, goal
+trends, 7-day recovery and injuries, but not what the athlete tells you or
+sessions done without starting the Garmin workout. Confirm it or override
+it with a reason. RED only comes from reported red-flag symptoms
+(`../coach-core/references/safety.md`). `status: null` means the data can't
+tell, so classify from the conversation.
 
 ## 3. Decide changes (only if the evidence justifies them)
 
@@ -52,11 +65,12 @@ first, priority order) and don't average.
 If the plan changes:
 1. edit the block yml (next week's prescription; add a `log` line)
 2. `log` to `plan_changes` (date, block_id, change, reason, decided_by)
-3. push next week to Garmin with `coach-garmin-sync`, and clean up
-   superseded templates
+3. `push_week(week=<next week>)`: it rebuilds only the sessions that
+   changed, verifies them, and removes the superseded versions (run/ride
+   sessions still go through `coach-garmin-sync`)
 
-If nothing changes, still push next week's workouts if they aren't on the
-calendar yet.
+If nothing changes, still push next week if any `block.next_week` session
+has `on_garmin: false`.
 
 Block finished (exit criteria met or time is up): run `coach-plan` to fill
 the next block (it was PROJECTED), then `coach-review` before activating.
@@ -84,7 +98,8 @@ the next block (it was PROJECTED), then `coach-review` before activating.
 
 ## 5. Log
 
-- `checkins`: `{date, kind: 'weekly', status, risk, summary}`
+- `checkins`: `{date, kind: 'weekly', status, risk, summary}`; if you
+  overrode `proposed`, say why in `summary`
 - `observations`: new facts, calculations, hypotheses (with confidence),
   decisions. Close resolved hypotheses with `update_record` (status
   confirmed/refuted).
