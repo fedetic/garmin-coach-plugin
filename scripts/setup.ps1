@@ -21,17 +21,51 @@ function Ok($t) { Write-Host "  + $t" -ForegroundColor Green }
 function Fail($t) { Write-Host "  x $t" -ForegroundColor Red; throw "setup stopped" }
 function Has($cmd) { [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 function Refresh-Path {
-  $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
-              [Environment]::GetEnvironmentVariable("Path", "User") + ";" + (Join-Path $HOME ".local\bin")
+  # registry PATH plus the folders installers use, in case PATH isn't updated yet
+  $extra = @((Join-Path $HOME ".local\bin"),
+             (Join-Path $env:ProgramFiles "Git\cmd"),
+             (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd")) | Where-Object { Test-Path $_ }
+  $env:Path = (@([Environment]::GetEnvironmentVariable("Path", "Machine"),
+                 [Environment]::GetEnvironmentVariable("Path", "User")) + $extra) -join ";"
+}
+
+# Git for Windows straight from its GitHub release, installed for this user only
+# (no admin needed). Used when winget is missing or fails.
+function Install-GitDirect {
+  try {
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq "ARM64") { "arm64" } else { "64-bit" }
+    $rel = Invoke-RestMethod "https://api.github.com/repos/git-for-windows/git/releases/latest" -UseBasicParsing
+    $asset = $rel.assets | Where-Object { $_.name -match "^Git-[\d.]+-$arch\.exe$" } | Select-Object -First 1
+    if (-not $asset) { return $false }
+    $exe = Join-Path $env:TEMP $asset.name
+    Write-Host "  downloading $($asset.name) ..."
+    Invoke-WebRequest $asset.browser_download_url -OutFile $exe -UseBasicParsing
+    Start-Process $exe -Wait -ArgumentList "/VERYSILENT", "/NORESTART", "/NOCANCEL", "/SP-", "/CURRENTUSER"
+    Remove-Item $exe -ErrorAction SilentlyContinue
+    return $true
+  } catch { Write-Host "  direct download failed: $($_.Exception.Message)"; return $false }
 }
 
 Step "1/6" "git"
+Refresh-Path
 if (Has git) { Ok "git found" }
 else {
-  if (-not (Has winget)) { Fail "git is missing. Install Git for Windows from https://git-scm.com/downloads/win, then run this setup again." }
-  winget install --id Git.Git -e --silent --accept-package-agreements --accept-source-agreements | Out-Null
-  Refresh-Path
-  if (Has git) { Ok "git installed" } else { Fail "git installed but not visible yet - close this window, open a new PowerShell and run setup again." }
+  if (Has winget) {
+    # user scope first (no admin prompt); machine scope if the package has no user installer
+    winget install --id Git.Git -e --source winget --scope user --silent --accept-package-agreements --accept-source-agreements
+    Refresh-Path
+    if (-not (Has git)) {
+      winget install --id Git.Git -e --source winget --silent --accept-package-agreements --accept-source-agreements
+      Refresh-Path
+    }
+  }
+  if (-not (Has git)) {
+    Write-Host "  winget unavailable or failed - installing Git for Windows directly"
+    if (Install-GitDirect) { Refresh-Path }
+  }
+  if (Has git) { Ok "git installed" }
+  else { Fail "could not install git. Install Git for Windows from https://git-scm.com/downloads/win, then open a new PowerShell and run this setup again." }
 }
 
 Step "2/6" "uv (runs the coach and Garmin servers; installs Python by itself)"
