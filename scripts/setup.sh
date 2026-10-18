@@ -16,7 +16,8 @@ done
 REPO="https://github.com/fedetic/garmin-coach-plugin.git"
 PLUGIN_DIR="$HOME/.garmin-coach/plugin"          # Codex and opencode
 WORKSPACE="$HOME/coach"
-GARMIN_MCP="git+https://github.com/Taxuspt/garmin_mcp"
+# pinned to a reviewed commit: the login tool sees your password, the server your token
+GARMIN_MCP="git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52"
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 step() { printf '\n\033[1m[%s] %s\033[0m\n' "$1" "$2"; }

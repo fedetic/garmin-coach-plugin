@@ -13,7 +13,8 @@ $Tool = if ($env:COACH_TOOL -in @("codex", "opencode")) { $env:COACH_TOOL } else
 $Repo = "https://github.com/fedetic/garmin-coach-plugin.git"
 $PluginDir = Join-Path $HOME ".garmin-coach\plugin"     # Codex and opencode
 $Workspace = Join-Path $HOME "coach"
-$GarminMcp = "git+https://github.com/Taxuspt/garmin_mcp"
+# pinned to a reviewed commit: the login tool sees your password, the server your token
+$GarminMcp = "git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52"
 
 function Step($n, $t) { Write-Host "`n[$n] $t" -ForegroundColor White }
 function Ok($t) { Write-Host "  + $t" -ForegroundColor Green }

@@ -19,7 +19,9 @@ from pathlib import Path
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 SERVER = PLUGIN_ROOT / "server"
 BEGIN, END = "# >>> garmin-coach >>>", "# <<< garmin-coach <<<"
-GARMIN_MCP = "git+https://github.com/Taxuspt/garmin_mcp"
+GARMIN_MCP_REPO = "git+https://github.com/Taxuspt/garmin_mcp"
+# Pinned to a reviewed commit (only talks to connect.garmin.com; tokens 0600). Bump deliberately.
+GARMIN_MCP = f"{GARMIN_MCP_REPO}@202913fde53c9d15890d661fc9748dc6d0d5af52"
 
 
 def _paths() -> tuple[Path, Path]:

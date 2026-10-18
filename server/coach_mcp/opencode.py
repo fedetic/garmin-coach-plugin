@@ -20,7 +20,7 @@ import os
 import sys
 from pathlib import Path
 
-from .codex import BEGIN, GARMIN_MCP, PLUGIN_ROOT, SERVER, _link, _unlink
+from .codex import BEGIN, GARMIN_MCP, GARMIN_MCP_REPO, PLUGIN_ROOT, SERVER, _link, _unlink
 from .codex import _paths as codex_paths
 
 AGENT = """---
@@ -87,7 +87,7 @@ def _servers(with_garmin: bool) -> dict:
 
 
 def _ours(entry: dict) -> bool:
-    return any(SERVER.as_posix() in str(a) or GARMIN_MCP in str(a) for a in entry.get("command") or [])
+    return any(SERVER.as_posix() in str(a) or GARMIN_MCP_REPO in str(a) for a in entry.get("command") or [])
 
 
 def _config_file(cfg_dir: Path) -> Path:

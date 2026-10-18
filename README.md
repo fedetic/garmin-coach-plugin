@@ -185,7 +185,7 @@ plugin into `~/.config/opencode/`. Remove with `... coach-opencode uninstall`.
 
 All systems:
 ```sh
-uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth
+uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52 garmin-mcp-auth
 ```
 Run it again whenever the coach says the Garmin login has expired.
 </details>
@@ -392,21 +392,23 @@ with that in mind.
   decision under Garmin's terms.
 - **Your password** is entered once into the `garmin-mcp-auth` login tool
   (from Taxuspt/garmin_mcp) and is not stored. What is stored is a login
-  token in `~/.garminconnect` (owner-only file permissions). It lasts about
-  6 months and can do anything your account can, so treat it like a
-  password: never commit it or copy it into your coaching folder. To revoke
-  it, delete `~/.garminconnect`. If you think it leaked, also change your
-  Garmin password.
-- **The garmin MCP server is not pinned.** The setup runs it straight from
-  the latest code on that GitHub repo, so whatever is published there runs
-  with your token the next time it starts. It's also the server with about
-  150 tools, including ones that delete activities. To reduce the risk:
-  - keep it off when you don't need it (opencode already does this by
-    default; the coach server covers the everyday flows itself), and
-  - pin it to a version you've reviewed by adding `@<commit>` to the URL in
-    the config, e.g.
-    `git+https://github.com/Taxuspt/garmin_mcp@<commit>` in `.mcp.json`,
-    `~/.codex/config.toml` or `~/.config/opencode/opencode.json`.
+  token, in two files: `~/.garminconnect/` and `~/.garminconnect_base64`
+  (both owner-only). It lasts about 6 months and can do anything your
+  account can, so treat it like a password: never commit it or copy it into
+  your coaching folder. To revoke it, delete **both**. If you think it
+  leaked, also change your Garmin password.
+- **The garmin MCP server and its login tool are pinned** to one commit
+  of Taxuspt/garmin_mcp (`202913f`, 2026-10-15), in `.mcp.json`, the Codex
+  and opencode installers and the setup scripts. That commit was checked
+  for what matters here: it only contacts `connect.garmin.com`, runs no
+  shell commands, writes its token files owner-only, and pins its own
+  dependencies (including the same `garminconnect` 0.3.2 the coach server
+  uses). That was a targeted check, not a full audit. Pinning means a later
+  change to that repo can't reach your password or token until the pin is
+  deliberately moved.
+- It's still the server with about 150 tools, including ones that delete
+  activities, so keep it off when you don't need it. opencode does this by
+  default, and the coach server covers the everyday flows itself.
 
 ### Git sync between computers
 

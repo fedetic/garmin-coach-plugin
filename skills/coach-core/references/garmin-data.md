@@ -73,7 +73,7 @@ didn't ask for, beyond pushing planned workouts.
 ## Connection problems
 
 - Auth tokens live in `~/.garminconnect/` and are valid for about 6 months.
-  Re-auth: `uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp garmin-mcp-auth`.
+  Re-auth: `uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52 garmin-mcp-auth`.
 - HTTP 401 on install from GitHub over HTTPS can be an anonymous rate limit.
   Switching to the `git+ssh://` URL works if the user has a GitHub SSH key.
 - "Result too large": paginate (`page`, `page_size`) or narrow the date range.
