@@ -395,6 +395,16 @@ def push_week(block_id: str = "", week: int = 0, dates: dict | None = None, dry_
     return ops.push_week(_root(), block_id, week, dates, dry_run, include_past)
 
 
+@mcp.tool()
+def validate_block(block: str = "") -> dict:
+    """Check a block yml before activating or pushing it: required fields, every session buildable
+    for Garmin in every week (exercise keys, targets), reps/sets present, pct_1rm/RPE sane, loads
+    buildable with the athlete's plates, >10% weekly load jumps, session length vs schedule.yml.
+    block: file name, block id, or empty for the active block. Fix every error, then call again;
+    warnings are judgment calls - fix or explain them."""
+    return ops.validate_block(_root(), block)
+
+
 def main():
     mcp.run()
 

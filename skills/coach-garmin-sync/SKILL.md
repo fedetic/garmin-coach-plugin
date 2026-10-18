@@ -17,10 +17,11 @@ truth: edit it first, then push.
      circuit) get `plain: true`.
    - run/ride/walk: `sport` and a `structure` in the format of
      `../coach-core/references/plan-format.md`.
-2. `push_week(week=N, dry_run=true)` when anything is unusual (new block,
+2. After editing the yml, `validate_block()` and fix any errors first.
+3. `push_week(week=N, dry_run=true)` when anything is unusual (new block,
    moved days, first push): it shows per session `would create`,
    `would replace <id>` or `would keep (unchanged)`, plus builder warnings.
-3. `push_week(week=N)`. For each session it builds the workout from the yml,
+4. `push_week(week=N)`. For each session it builds the workout from the yml,
    uploads it, reads it back and compares it step by step (a mismatch
    deletes the upload and reports `FAILED verification` with the
    differences), schedules it, then unschedules and deletes the version it
@@ -28,7 +29,7 @@ truth: edit it first, then push.
    - Move sessions: `dates={session_id: "YYYY-MM-DD"}`.
    - Defaults: active block, current week; past dates skipped unless
      `include_past=true`.
-4. Read the result:
+5. Read the result:
    - `warnings`: steps the watch won't recognise (unknown exercise, target
      not understood). Fix the yml and push again.
    - `skipped: ...`: the reason says what's missing.

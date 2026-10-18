@@ -8,6 +8,12 @@ description: Specialist review of a garmin-coach training block before it activa
 Load `coach-core` (`../coach-core/SKILL.md`) and
 `../coach-core/references/specialists.md`.
 
+Start with `validate_block()`. Mechanical errors (missing reps, bad
+Garmin keys, unbuildable loads) go back to `coach-plan` before any role
+reviews; the roles judge the training, not the yml syntax. Hand its
+warnings to the relevant role (load jumps to Programming, session length to
+Recovery).
+
 ## Roster
 
 The always-on core (Programming, Recovery/Readiness, Injury-Risk, Mobility,

@@ -58,10 +58,13 @@ and their logs/reviews.
 2. `upsert_training_block` for every block (status planned, or active for
    the one starting now).
 3. `goals`/`milestones` rows in the db match the roadmap.
-4. Run `coach-review` before the block goes active. Fix or log anything it
+4. `validate_block("<file>")` for every filled block. Fix each error in
+   the yml and validate again until `ok`. Fix or justify each warning
+   (a deliberate load jump, a longer test day).
+5. Run `coach-review` before the block goes active. Fix or log anything it
    flags.
-5. `coach-garmin-sync` to push the first week (or the current week).
-6. `log` to `plan_changes` for any revision of an existing plan, with the reason.
+6. `coach-garmin-sync` to push the first week (or the current week).
+7. `log` to `plan_changes` for any revision of an existing plan, with the reason.
 
 ## Revising mid-block
 

@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from . import db, garmin, garmin_live as gl, readiness
+from . import calc, db, garmin, garmin_live as gl, readiness
 
 WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 BODY = ("weight_kg", "body_fat_pct")
@@ -599,3 +599,178 @@ def push_week(root: Path, block_id: str = "", week: int = 0, dates: dict | None 
                    other_workouts_that_day=others or None)
         results.append(res)
     return {"block": bid, "week": week, "dry_run": dry_run, "sessions": results}
+
+
+# ---------------------------------------------------------------- 4. validate block
+
+def _implement_for(exercise: dict, loads: dict) -> tuple[str | None, dict | None]:
+    name = exercise.get("implement") or next(
+        (k for k in ("barbell", "dumbbell", "kettlebell", "cable") if k in str(exercise.get("exercise", "")).lower()
+         or k in str((exercise.get("garmin") or {}).get("exercise", "")).lower()), None)
+    return name, loads.get(name) if name else None
+
+
+def _strength_minutes(s: dict, week: int) -> float:
+    sec = 300.0 if s.get("warmup", True) else 0.0
+    for e in s.get("exercises", []):
+        p = prescription(e, week)
+        sets = int(p.get("sets") or 1)
+        work = float(p.get("duration_sec") or 0) or 4 * float(p.get("reps") or 8) + 15
+        sec += sets * work + max(sets - 1, 0) * float(p.get("rest_sec") or 90) + 60  # +1 min changeover
+    return sec / 60
+
+
+def _endurance_minutes(st: dict) -> float | None:
+    def part(p):
+        if not p:
+            return 0.0
+        if p.get("distance_km"):
+            raise LookupError
+        return float(p.get("duration_sec") or 0) / 60 + float(p.get("duration_min") or 0)
+    try:
+        iv = st.get("intervals") or {}
+        reps = int(iv.get("repeats") or 1)
+        return part(st.get("warmup")) + part(st.get("main")) + part(st.get("cooldown")) + \
+            reps * (part(iv.get("work")) + part(iv.get("recovery")))
+    except LookupError:
+        return None  # distance steps: duration depends on pace
+
+
+def validate_block(root: Path, block: str = "") -> dict:
+    """Check a block yml before it is activated or pushed. block: file name under plan/blocks,
+    block id, or empty for the active block. Builds every session for every week."""
+    con = db.connect(root)
+    blocks_dir = root / "plan" / "blocks"
+    path = None
+    if block.endswith((".yml", ".yaml")):
+        path = blocks_dir / Path(block).name
+    else:
+        row, _ = _active_block(root, con, block or None)
+        if row and row.get("file"):
+            path = blocks_dir / row["file"]
+        else:
+            for p in sorted(blocks_dir.glob("*.yml")):
+                if (yaml.safe_load(p.read_text()) or {}).get("id") == (block or (row or {}).get("id")):
+                    path = p
+    if not path or not path.exists():
+        return {"ok": False, "errors": [f"block {block or '(active)'} not found under plan/blocks"]}
+    errors, warnings = [], []
+    try:
+        b = yaml.safe_load(path.read_text()) or {}
+    except yaml.YAMLError as e:
+        return {"ok": False, "file": path.name, "errors": [f"yml does not parse: {e}"]}
+
+    for k in ("id", "name", "start_date", "duration_weeks", "sessions"):
+        if not b.get(k):
+            errors.append(f"missing top-level `{k}`")
+    start = _start(b, None)
+    if b.get("start_date") and start is None:
+        errors.append(f"start_date {b['start_date']!r} is not YYYY-MM-DD")
+    elif start and start.weekday() != 0:
+        warnings.append(f"start_date {start} is a {start:%A}; weeks count from it, so 'week 1' starts mid-week")
+    try:
+        weeks = int(b.get("duration_weeks") or 0)
+    except (TypeError, ValueError):
+        weeks = 0
+        errors.append("duration_weeks must be a whole number")
+    if not b.get("exit_criteria"):
+        warnings.append("no exit_criteria: the weekly check-in can't tell when the block is done")
+    row = con.execute("SELECT file, status FROM training_blocks WHERE id=?", (b.get("id"),)).fetchone()
+    if not row:
+        warnings.append(f"block {b.get('id')} is not in the database: call upsert_training_block(file={path.name!r})")
+    elif row["file"] != path.name:
+        warnings.append(f"training_blocks.file is {row['file']!r}, expected {path.name!r}")
+
+    root_cfg = root / "athlete"
+    sched = yaml.safe_load((root_cfg / "schedule.yml").read_text()) if (root_cfg / "schedule.yml").exists() else {}
+    loads = (yaml.safe_load((root_cfg / "equipment.yml").read_text()) or {}).get("loads") or {} \
+        if (root_cfg / "equipment.yml").exists() else {}
+    cap = sched.get("session_length_min") if isinstance(sched.get("session_length_min"), (int, float)) else None
+    pref = [str(d)[:3].lower() for d in sched.get("preferred_days") or []] \
+        if isinstance(sched.get("preferred_days"), list) else []
+
+    seen = set()
+    sessions = b.get("sessions") or []
+    for i, s in enumerate(sessions):
+        sid = s.get("id") or f"session[{i}]"
+        where = f"{sid}:"
+        if not s.get("id"):
+            errors.append(f"{where} missing `id`")
+        elif sid in seen:
+            errors.append(f"{where} duplicate id")
+        seen.add(sid)
+        day = str(s.get("day", ""))[:3].lower()
+        if not s.get("date") and day not in WEEKDAYS:
+            errors.append(f"{where} `day` must be a weekday name (got {s.get('day')!r})")
+        elif pref and day and day not in pref:
+            warnings.append(f"{where} {s.get('day')} is not in schedule.yml preferred_days")
+        for wk in (s.get("weeks") or {}):
+            n = re.search(r"\d+", str(wk))
+            if weeks and n and int(n.group()) > weeks:
+                warnings.append(f"{where} has an override for week {wk} but the block is {weeks} weeks")
+        kind = s.get("kind", "strength")
+        if kind != "strength" and not s.get("structure"):
+            warnings.append(f"{where} no `structure`: shown in the plan but not pushed to Garmin")
+            continue
+        prev: dict[str, float] = {}
+        for week in range(1, max(weeks, 1) + 1):
+            tag = f"{where} wk{week}"
+            try:
+                built = build_session(s, f"check {sid}", week)
+            except (ValueError, KeyError, TypeError) as e:
+                errors.append(f"{tag} can't be built for Garmin: {e}")
+                break
+            for w in built["warnings"]:  # a wrong key or target loses intent silently; a missing mapping doesn't
+                bad = "not in Garmin's taxonomy" in w or "not understood" in w
+                (errors if bad else warnings).append(f"{tag} {w}")
+            if kind == "strength":
+                minutes = _strength_minutes(s, week)
+                for e in s.get("exercises", []):
+                    p = prescription(e, week)
+                    ex = p.get("exercise") or p.get("name") or "exercise"
+                    if not (p.get("reps") or p.get("duration_sec")):
+                        errors.append(f"{tag} {ex}: needs reps or duration_sec")
+                    if not p.get("sets"):
+                        warnings.append(f"{tag} {ex}: no sets (1 assumed)")
+                    if p.get("pct_1rm") and float(p["pct_1rm"]) > 1.0:
+                        errors.append(f"{tag} {ex}: pct_1rm {p['pct_1rm']} > 1.0 (write 0.85, not 85)")
+                    if p.get("pct_1rm") and not p.get("weight_kg"):
+                        errors.append(f"{tag} {ex}: pct_1rm without weight_kg (use prescribe_load)")
+                    if p.get("rpe") is not None and not 5 <= float(p["rpe"]) <= 10:
+                        errors.append(f"{tag} {ex}: rpe {p['rpe']} outside 5-10")
+                    elif p.get("rpe") and float(p["rpe"]) > 9.5 and not is_test(s):
+                        warnings.append(f"{tag} {ex}: RPE {p['rpe']} outside a test session")
+                    w = p.get("weight_kg")
+                    if w:
+                        imp_name, imp = _implement_for(p, loads)
+                        if imp:
+                            r = calc.round_load(float(w), imp)
+                            if abs(r["load"] - float(w)) > 0.01:
+                                warnings.append(f"{tag} {ex}: {w:g}kg isn't buildable on your {imp_name} "
+                                                f"(nearest {r['load']:g}kg)")
+                        if ex in prev and prev[ex] and float(w) > prev[ex] * 1.10:
+                            warnings.append(f"{tag} {ex}: load jumps {prev[ex]:g} -> {w:g}kg (>10% in a week)")
+                        prev[ex] = float(w)
+            else:
+                minutes = _endurance_minutes(garmin.endurance_structure(s.get("structure"),
+                                                                         _week_key(s.get("weeks"), week)))
+            if cap and minutes and minutes > cap * 1.15:
+                warnings.append(f"{tag} estimated {minutes:.0f} min vs session_length_min {cap}")
+    if pref and len(sessions) and isinstance(sched.get("sessions_per_week"), int) \
+            and len(sessions) > sched["sessions_per_week"]:
+        warnings.append(f"{len(sessions)} sessions/week vs schedule.yml sessions_per_week "
+                        f"{sched['sessions_per_week']}")
+    return {"ok": not errors, "file": path.name, "block": b.get("id"), "weeks_checked": weeks,
+            "sessions": len(sessions), "errors": _dedupe_weeks(errors) or None,
+            "warnings": _dedupe_weeks(warnings) or None}
+
+
+def _dedupe_weeks(items: list[str]) -> list[str]:
+    """The same problem in every week -> one line with a count."""
+    counts: dict[str, int] = {}
+    first: dict[str, str] = {}
+    for it in items:
+        key = re.sub(r" wk\d+", "", it, count=1)
+        counts[key] = counts.get(key, 0) + 1
+        first.setdefault(key, it)
+    return [first[k] + (f" (+{n - 1} more weeks)" if n > 1 else "") for k, n in counts.items()]

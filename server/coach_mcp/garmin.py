@@ -220,9 +220,10 @@ def _target(t, warnings: list[str], where: str) -> tuple[dict, str]:
     {hr_bpm: [135, 148]}, {pace_min_km: ["5:50", "5:30"]} (running/walking)."""
     if t in (None, "", {}):
         return {"targetType": NO_TARGET}, ""
+    raw = t
     if isinstance(t, (str, int)):
         m = re.fullmatch(r"z?([1-5])", str(t).strip().lower())
-        t = {"hr_zone": int(m.group(1))} if m else {"unparsed": t}
+        t = {"hr_zone": int(m.group(1))} if m else {}
     if "hr_zone" in t:
         z = int(re.sub(r"\D", "", str(t["hr_zone"])) or 0)
         if 1 <= z <= 5:
@@ -235,9 +236,9 @@ def _target(t, warnings: list[str], where: str) -> tuple[dict, str]:
         slow, fast = sorted(t["pace_min_km"], key=_pace_ms)
         return {"targetType": PACE_ZONE, "targetValueOne": round(lo, 4), "targetValueTwo": round(hi, 4)}, \
             f"{fast}-{slow}/km"
-    warnings.append(f"{where}: target {t!r} not understood (use hr_zone 1-5, hr_bpm [lo, hi] or "
+    warnings.append(f"{where}: target {raw!r} not understood (use hr_zone 1-5, hr_bpm [lo, hi] or "
                     "pace_min_km [slow, fast]); step has no target")
-    return {"targetType": NO_TARGET}, f" {t}" if not isinstance(t, dict) else ""
+    return {"targetType": NO_TARGET}, str(raw) if isinstance(raw, str) else ""
 
 
 def _end(part: dict, warnings: list[str], where: str) -> tuple[dict, str]:

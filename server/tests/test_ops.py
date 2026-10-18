@@ -301,7 +301,7 @@ def test_endurance_builder():
     work = rep["workoutSteps"][0]
     assert work["endCondition"]["conditionTypeKey"] == "distance" and work["endConditionValue"] == 1000
     assert work["targetValueOne"] == round(1000 / 260, 4) and work["targetValueTwo"] == round(1000 / 250, 4)
-    assert b["workout"]["description"].startswith("Warm-up 15 min + 5x(Rep 1 km 4:10-4:20/km / Easy 90s)")
+    assert b["workout"]["description"].startswith("Warm-up 15 min Z1-Z2 + 5x(Rep 1 km 4:10-4:20/km / Easy 90s)")
     with pytest.raises(ValueError):
         garmin.build_endurance_workout("x", "swimming", {"main": {"duration_min": 30}})
 
@@ -313,3 +313,35 @@ def test_verify_catches_target_change():
     assert ops.verify(b["workout"], fetched) == []
     fetched["workoutSegments"][0]["workoutSteps"][0]["zoneNumber"] = 3
     assert ops.verify(b["workout"], fetched)
+
+
+def test_validate_block(ws):
+    root, fake = ws
+    out = ops.validate_block(root)
+    assert out["file"] == "block-01-test.yml" and out["weeks_checked"] == 4
+    errs = "\n".join(out["errors"])
+    # bench only has week 1-2 prescriptions -> weeks 3-4 have no reps; reported once with a count
+    assert "today_lift: wk3 barbell_bench_press: needs reps or duration_sec (+1 more weeks)" in errs
+    warns = "\n".join(out["warnings"])
+    assert "mobility: no `structure`" in warns and "exit_criteria" in warns
+    assert not out["ok"]
+
+    p = root / "plan" / "blocks" / "block-01-test.yml"
+    b = yaml.safe_load(p.read_text())
+    bench = b["sessions"][0]["exercises"][0]
+    bench["weeks"] = {1: {"sets": 3, "reps": 2, "weight_kg": 90, "rpe": 7},
+                      2: {"sets": 3, "reps": 2, "weight_kg": 101, "rpe": 7.5},
+                      3: {"sets": 3, "reps": 2, "weight_kg": 92.5, "pct_1rm": 92, "rpe": 8},
+                      4: {"sets": 2, "reps": 3, "weight_kg": 80, "rpe": 6}}
+    bench["garmin"]["exercise"] = "BARBELL_BENCH_PRES"  # typo
+    b["sessions"][1]["structure"]["main"]["target"] = "Z1-Z2"
+    b["exit_criteria"] = ["RPE logged"]
+    p.write_text(yaml.safe_dump(b))
+    out = ops.validate_block(root, "block-01-test.yml")
+    errs, warns = "\n".join(out["errors"]), "\n".join(out["warnings"])
+    assert "BARBELL_BENCH_PRES is not in Garmin's taxonomy" in errs
+    assert "pct_1rm 92 > 1.0" in errs
+    assert "easy_run: wk1 main: target 'Z1-Z2' not understood" in errs
+    assert "load jumps 90 -> 101kg" in warns
+    assert "101kg isn't buildable on your barbell (nearest 100kg)" in warns or "isn't buildable" in warns
+    assert ops.validate_block(root, "nope.yml")["ok"] is False
