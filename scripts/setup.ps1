@@ -2,15 +2,16 @@
 #
 #   irm https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.ps1 | iex
 #   $env:COACH_TOOL="codex"; irm https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.ps1 | iex
+#   $env:COACH_TOOL="opencode"; irm ... | iex   # opencode (e.g. with a local model)
 #
 # Safe to run again: every step checks first and skips what is already done.
 # Continue, not Stop: Windows PowerShell 5.1 turns any stderr output of a native
 # command into a terminating error under Stop. Failures are checked explicitly.
 $ErrorActionPreference = "Continue"
 
-$Tool = if ($env:COACH_TOOL -eq "codex") { "codex" } else { "claude" }
+$Tool = if ($env:COACH_TOOL -in @("codex", "opencode")) { $env:COACH_TOOL } else { "claude" }
 $Repo = "https://github.com/fedetic/garmin-coach-plugin.git"
-$PluginDir = Join-Path $HOME ".garmin-coach\plugin"     # only used for Codex
+$PluginDir = Join-Path $HOME ".garmin-coach\plugin"     # Codex and opencode
 $Workspace = Join-Path $HOME "coach"
 $GarminMcp = "git+https://github.com/Taxuspt/garmin_mcp"
 
@@ -49,9 +50,12 @@ if ($Tool -eq "claude") {
     Refresh-Path
     if (Has claude) { Ok "Claude Code installed" } else { Fail "claude not on PATH - open a new PowerShell and run setup again." }
   }
-} else {
+} elseif ($Tool -eq "codex") {
   if (Has codex) { Ok "Codex found" }
   else { Fail "Codex is not installed. Install it (https://developers.openai.com/codex/cli), then run this setup again." }
+} else {
+  if (Has opencode) { Ok "opencode found" }
+  else { Fail "opencode is not installed. Install it (https://opencode.ai, e.g. npm install -g opencode-ai), then run this setup again." }
 }
 
 Step "4/6" "garmin-coach plugin"
@@ -72,8 +76,8 @@ if ($Tool -eq "claude") {
     if ($LASTEXITCODE -ne 0) { Fail "could not download the plugin from $Repo" }
     Ok "plugin downloaded to $PluginDir"
   }
-  uv run --quiet --frozen --project (Join-Path $PluginDir "server") coach-codex install
-  if ($LASTEXITCODE -ne 0) { Fail "Codex registration failed (see message above)" }
+  uv run --quiet --frozen --project (Join-Path $PluginDir "server") "coach-$Tool" install
+  if ($LASTEXITCODE -ne 0) { Fail "$Tool registration failed (see message above)" }
 }
 
 Step "5/6" "Garmin Connect login"
@@ -97,3 +101,4 @@ Write-Host "    $Tool"
 Write-Host ""
 Write-Host "Then type:   set me up as a new athlete"
 if ($Tool -eq "claude") { Write-Host "(First time? Claude Code asks you to log in - a Claude Pro or Max plan is needed.)" }
+if ($Tool -eq "opencode") { Write-Host "(In opencode, press Tab to switch to the 'coach' agent. Local model? See 'Local models' in the README.)" }

@@ -128,3 +128,40 @@ def test_session_dump_and_restore(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "rebuilt" in out and "weekly check-in" in out
     assert db.query(root, "SELECT count(*) n FROM checkins")[0]["n"] == 1
+
+
+def test_opencode_install_roundtrip(tmp_path, monkeypatch):
+    import json
+    from coach_mcp import opencode
+    cfg, skills = tmp_path / "oc", tmp_path / "skills"
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(cfg))
+    monkeypatch.setenv("CODEX_SKILLS_DIR", str(skills))
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "codex"))
+    cfg.mkdir()
+    (cfg / "opencode.json").write_text(json.dumps({"model": "ollama/qwen3:14b", "mcp": {"other": {"type": "local"}}}))
+    opencode.install()
+    conf = json.loads((cfg / "opencode.json").read_text())
+    assert conf["model"] == "ollama/qwen3:14b" and "other" in conf["mcp"]  # merged, not replaced
+    assert conf["mcp"]["coach"]["enabled"] and not conf["mcp"]["garmin"]["enabled"]
+    assert (skills / "coach-core" / "SKILL.md").exists()
+    assert "mode: primary" in (cfg / "agents" / "coach.md").read_text()
+    js = (cfg / "plugins" / "garmin-coach.js").read_text()
+    assert opencode.SERVER.as_posix() in js and "session.idle" in js
+    opencode.install(with_garmin=True)  # re-run is safe
+    assert json.loads((cfg / "opencode.json").read_text())["mcp"]["garmin"]["enabled"]
+    opencode.uninstall()
+    conf = json.loads((cfg / "opencode.json").read_text())
+    assert list(conf["mcp"]) == ["other"] and not (cfg / "agents" / "coach.md").exists()
+    assert not (skills / "coach-core").exists()
+
+
+def test_opencode_leaves_commented_config_alone(tmp_path, monkeypatch, capsys):
+    from coach_mcp import opencode
+    cfg = tmp_path / "oc"
+    monkeypatch.setenv("OPENCODE_CONFIG_DIR", str(cfg))
+    monkeypatch.setenv("CODEX_SKILLS_DIR", str(tmp_path / "skills"))
+    cfg.mkdir()
+    text = '{\n  // my settings\n  "model": "ollama/x"\n}\n'
+    (cfg / "opencode.jsonc").write_text(text)
+    opencode.install()
+    assert (cfg / "opencode.jsonc").read_text() == text and '"coach"' in capsys.readouterr().out

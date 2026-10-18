@@ -9,6 +9,7 @@ dependencies = ["mcp>=1.2,<2", "pyyaml>=6", "garminconnect==0.3.2"]
 coach-mcp = "coach_mcp.server:main"
 coach-session = "coach_mcp.session:main"
 coach-codex = "coach_mcp.codex:main"
+coach-opencode = "coach_mcp.opencode:main"
 
 [dependency-groups]
 dev = ["pytest>=8"]

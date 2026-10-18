@@ -3,14 +3,18 @@
 #
 #   curl -fsSL https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.sh | bash
 #   ... | bash -s -- --codex        # use OpenAI Codex instead of Claude Code
+#   ... | bash -s -- --opencode     # use opencode (e.g. with a local model)
 #
 # Safe to run again: every step checks first and skips what is already done.
 set -euo pipefail
 
 TOOL=claude
-for a in "$@"; do [ "$a" = "--codex" ] && TOOL=codex; done
+for a in "$@"; do
+  [ "$a" = "--codex" ] && TOOL=codex
+  [ "$a" = "--opencode" ] && TOOL=opencode
+done
 REPO="https://github.com/fedetic/garmin-coach-plugin.git"
-PLUGIN_DIR="$HOME/.garmin-coach/plugin"          # only used for Codex
+PLUGIN_DIR="$HOME/.garmin-coach/plugin"          # Codex and opencode
 WORKSPACE="$HOME/coach"
 GARMIN_MCP="git+https://github.com/Taxuspt/garmin_mcp"
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
@@ -39,9 +43,12 @@ if [ "$TOOL" = claude ]; then
   if command -v claude >/dev/null; then ok "Claude Code found"
   else curl -fsSL https://claude.ai/install.sh | bash && ok "Claude Code installed"; fi
   command -v claude >/dev/null || die "claude not on PATH - open a new terminal and run this setup again."
-else
+elif [ "$TOOL" = codex ]; then
   command -v codex >/dev/null && ok "Codex found" || die \
     "Codex is not installed. Install it (https://developers.openai.com/codex/cli, e.g. npm install -g @openai/codex), then run this setup again with --codex."
+else
+  command -v opencode >/dev/null && ok "opencode found" || die \
+    "opencode is not installed. Install it (https://opencode.ai, e.g. npm install -g opencode-ai), then run this setup again with --opencode."
 fi
 
 step 4/6 "garmin-coach plugin"
@@ -58,7 +65,7 @@ if [ "$TOOL" = claude ]; then
 else
   if [ -d "$PLUGIN_DIR/.git" ]; then git -C "$PLUGIN_DIR" pull --quiet && ok "plugin updated"
   else git clone --quiet "$REPO" "$PLUGIN_DIR" && ok "plugin downloaded to $PLUGIN_DIR"; fi
-  uv run --quiet --frozen --project "$PLUGIN_DIR/server" coach-codex install | sed 's/^/  /'
+  uv run --quiet --frozen --project "$PLUGIN_DIR/server" coach-$TOOL install | sed 's/^/  /'
 fi
 
 step 5/6 "Garmin Connect login"
@@ -82,3 +89,4 @@ All set. Start coaching:
 Then type:   set me up as a new athlete
 EOF
 if [ "$TOOL" = claude ]; then echo "(First time? Claude Code asks you to log in - a Claude Pro or Max plan is needed.)"; fi
+if [ "$TOOL" = opencode ]; then echo "(In opencode, press Tab to switch to the 'coach' agent. Local model? See 'Local models' in the README.)"; fi
