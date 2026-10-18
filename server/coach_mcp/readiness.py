@@ -92,3 +92,44 @@ def assess(rows: list[dict], on: str | None = None) -> dict:
                        "repeated_deterioration (3+ bad days in 7) is worth acting on even if each value looks normal."
                        if flags else "no data recorded yet - call record_metrics first",
     }
+
+
+# factors that speak to overnight recovery (vo2max/load/steps are context, not readiness)
+RECOVERY = ("hrv_overnight_ms", "rhr_bpm", "sleep_hours", "sleep_score", "body_battery_morning",
+            "stress_avg", "training_readiness")
+
+
+def propose_call(rep: dict, test_day: bool = False) -> dict:
+    """Draft GO / MODIFY / REST from the daily decision table, using data only.
+
+    The athlete-reported half of the table (pain, illness) is not known here, so
+    this is a draft: the coach confirms or overrides it after asking."""
+    worst = {}
+    for m in RECOVERY:
+        f = rep["factors"].get(m) or {}
+        flags = {f.get("flag_today"), f.get("flag_7d")}
+        worst[m] = "ORANGE" if "ORANGE" in flags else "YELLOW" if "YELLOW" in flags else None
+    orange = [m for m, w in worst.items() if w == "ORANGE"]
+    yellow = [m for m, w in worst.items() if w == "YELLOW"]
+    repeated = [m for m in rep["summary"]["repeated_deterioration"] if m in RECOVERY]
+    flagged = orange + yellow + repeated
+    low_conf = sorted({m for m in flagged if rep["factors"][m].get("caveat")})
+
+    if "hrv_overnight_ms" in orange and "rhr_bpm" in orange:
+        call, rule = "REST", "ORANGE on both HRV and RHR"
+    elif test_day and orange:
+        call, rule = "MODIFY", "test/max day with an ORANGE factor: move the test, train as a normal session"
+    elif orange or len(yellow) >= 2 or repeated:
+        parts = ([f"ORANGE: {', '.join(orange)}"] if orange else []) + \
+                ([f"YELLOW: {', '.join(yellow)}"] if len(yellow) >= 2 else []) + \
+                ([f"3+ bad days in 7: {', '.join(repeated)}"] if repeated else [])
+        call, rule = "MODIFY", "; ".join(parts)
+    else:
+        call = "GO"
+        rule = "no ORANGE, at most one YELLOW" + (f" ({yellow[0]})" if yellow else "")
+    return {
+        "call": call, "rule": rule,
+        "confidence": "LOW" if low_conf or not any(rep["factors"].get(m) for m in RECOVERY) else "NORMAL",
+        "low_confidence_factors": low_conf or None,
+        "not_checked": "pain, illness, unusual stress - ask; illness or concerning pain overrides to REST",
+    }

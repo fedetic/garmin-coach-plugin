@@ -130,6 +130,8 @@ def test_daily_snapshot(ws):
     assert r["sleep_hours"]["today"] == 5.0
     assert "hrv_overnight_ms" in out["repeated_deterioration"]
     assert out["plan"]["week"] == 1
+    assert out["proposed_call"]["call"] == "MODIFY" and "hrv_overnight_ms" in out["proposed_call"]["rule"]
+    assert out["proposed_call"]["also_apply_session_gate"] == ["no max if HRV ORANGE"]
     lift = out["plan"]["today"][0]
     assert lift["exercises"][0] == "Barbell Bench Press 3x2 @90kg RPE7" and lift["readiness_gate"]
     assert out["open_injuries"] == ["left shoulder (monitoring)"]
@@ -138,6 +140,34 @@ def test_daily_snapshot(ws):
     # second call only refreshes yesterday + today
     assert ops.daily_snapshot(root)["sync"]["metric_days_fetched"] == 2
     assert len(str(out)) < 4000  # compact: this is the whole point
+
+
+def _rep(**flags):
+    """Minimal readiness.assess() output: metric=(flag_today, flag_7d[, bad_days])."""
+    factors = {m: {"flag_today": f[0], "flag_7d": f[1], "bad_days_last_7": f[2] if len(f) > 2 else 0}
+               for m, f in flags.items()}
+    return {"factors": factors, "summary": {
+        "repeated_deterioration": sorted(m for m, f in factors.items() if f["bad_days_last_7"] >= 3)}}
+
+
+@pytest.mark.parametrize("flags,test_day,call", [
+    ({"hrv_overnight_ms": ("GREEN", "GREEN"), "rhr_bpm": ("YELLOW", "GREEN")}, False, "GO"),
+    ({"hrv_overnight_ms": ("YELLOW", "GREEN"), "sleep_hours": ("GREEN", "YELLOW")}, False, "MODIFY"),
+    ({"sleep_hours": ("GREEN", "GREEN", 4)}, False, "MODIFY"),
+    ({"stress_avg": ("ORANGE", "GREEN")}, False, "MODIFY"),
+    ({"hrv_overnight_ms": ("ORANGE", "YELLOW"), "rhr_bpm": ("GREEN", "ORANGE")}, False, "REST"),
+    ({"steps": ("ORANGE", "ORANGE"), "vo2max": ("ORANGE", "ORANGE")}, False, "GO"),  # not recovery factors
+])
+def test_propose_call_rules(flags, test_day, call):
+    from coach_mcp import readiness
+    assert readiness.propose_call(_rep(**flags), test_day)["call"] == call
+
+
+def test_propose_call_test_day_moves_test():
+    from coach_mcp import readiness
+    out = readiness.propose_call(_rep(sleep_hours=("ORANGE", "GREEN")), test_day=True)
+    assert out["call"] == "MODIFY" and "move the test" in out["rule"]
+    assert ops.is_test({"name": "Fri - Bench 1RM test"}) and not ops.is_test({"name": "Max", "test": False})
 
 
 def test_push_week_create_keep_replace(ws):

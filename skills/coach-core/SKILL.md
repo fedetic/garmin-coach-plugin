@@ -44,6 +44,10 @@ device or tool) can pick up.
 
 ## Tools
 
+- **coach server, compound tools** (talk to Garmin directly; use these
+  first, one call each): `garmin_daily_snapshot` (daily check),
+  `garmin_sync_since` (weekly data pull + summary), `push_week` (block yml
+  week -> verified, scheduled Garmin workouts).
 - **coach server** (deterministic, use instead of mental math):
   `workspace_status`, `query`, `log`, `update_record`, `upsert_training_block`,
   `record_metrics`, `readiness_report`, `estimate_1rm`, `prescribe_load`,

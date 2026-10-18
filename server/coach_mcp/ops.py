@@ -158,6 +158,13 @@ def _label(p: dict) -> str:
     return s
 
 
+def is_test(session: dict) -> bool:
+    """Explicit `test: true`, or a name that says test/max/1RM."""
+    if "test" in session:
+        return bool(session["test"])
+    return bool(re.search(r"\b(test|max|1rm)\b", str(session.get("name", "")), re.I))
+
+
 def session_summary(session: dict, week: int) -> dict:
     out = {"id": session.get("id"), "name": session.get("name"), "kind": session.get("kind", "strength")}
     if out["kind"] == "strength":
@@ -166,6 +173,8 @@ def session_summary(session: dict, week: int) -> dict:
         out["structure"] = {**(session.get("structure") or {}), **_week_key(session.get("weeks"), week)}
     if session.get("readiness_gate"):
         out["readiness_gate"] = session["readiness_gate"]
+    if is_test(session):
+        out["test_day"] = True
     return out
 
 
@@ -206,7 +215,7 @@ def daily_snapshot(root: Path, day: str = "", backfill_days: int = 0) -> dict:
     rep = _readiness(root, d.isoformat())
 
     row, block = _active_block(root, con)
-    plan = None
+    plan, todays = None, []
     if block:
         week = week_of(block, row, d)
         todays = [s for s in block.get("sessions", []) if week and session_date(block, row, s, week) == d]
@@ -214,6 +223,12 @@ def daily_snapshot(root: Path, day: str = "", backfill_days: int = 0) -> dict:
                 "of_weeks": block.get("duration_weeks"),
                 "today": [session_summary(s, week) for s in todays] or "rest day (no session planned)",
                 "cautions": block.get("cautions") or None}
+    proposed = readiness.propose_call(rep, test_day=any(is_test(s) for s in todays))
+    gates = [s["readiness_gate"] for s in todays if s.get("readiness_gate")]
+    if gates:
+        proposed["also_apply_session_gate"] = gates
+    injuries = [f"{r['area']} ({r['status']})" for r in con.execute(
+        "SELECT area, status FROM injuries WHERE status != 'resolved'")]
 
     try:
         cal = [f"{s['name']}{' (done)' if s['completed'] else ''}" for s in gl.scheduled(d.isoformat(), d.isoformat())]
@@ -223,6 +238,7 @@ def daily_snapshot(root: Path, day: str = "", backfill_days: int = 0) -> dict:
         "SELECT name, sport, round(duration_sec/60) AS min, rpe FROM workouts WHERE date=?", (d.isoformat(),))]
     return {
         "date": d.isoformat(), "weekday": d.strftime("%A"),
+        "proposed_call": proposed,
         "readiness_vs_your_baseline": _compact_readiness(rep),
         "repeated_deterioration": rep["summary"]["repeated_deterioration"] or None,
         "missing_today": rep["summary"]["missing_today"] or None,
@@ -230,11 +246,11 @@ def daily_snapshot(root: Path, day: str = "", backfill_days: int = 0) -> dict:
         "plan": plan or "no active block",
         "garmin_calendar_today": cal or "nothing scheduled",
         "already_done_today": done_today or None,
-        "open_injuries": [f"{r['area']} ({r['status']})" for r in con.execute(
-            "SELECT area, status FROM injuries WHERE status != 'resolved'")] or None,
+        "open_injuries": injuries or None,
         "sync": {"metric_days_fetched": sync["days_fetched"], "activities_checked": len(new_acts)},
         "how_to_read": "flags compare against the athlete's own 60-day baseline; YELLOW 1-2 SD worse, "
-                       "ORANGE >2 SD worse. Decide GO/MODIFY/REST from the pattern, not one value.",
+                       "ORANGE >2 SD worse. proposed_call applies the decision table to the data only - "
+                       "confirm or override it after asking about pain/illness.",
     }
 
 

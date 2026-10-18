@@ -58,6 +58,7 @@ sessions:
     day: Monday
     name: "Mon - Bench heavy"
     kind: strength
+    # test: true             # test/max day: stricter readiness rules (also inferred from "test"/"max"/"1RM" in the name)
     exercises:
       - exercise: barbell_bench_press
         garmin: {category: BENCH_PRESS, exercise: BARBELL_BENCH_PRESS}
