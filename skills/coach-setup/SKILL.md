@@ -73,7 +73,8 @@ Ask only what Garmin didn't answer. Cover:
    is often informative), job stress, recovery habits.
 7. **Nutrition**: eating pattern, restrictions/intolerances, budget and
    cooking habits, whether they log food, protein estimate, weight direction
-   wanted.
+   wanted, and roughly what they eat now if they know (it calibrates the
+   energy estimate below).
 
 Stop asking once you have enough to plan the first block safely. Gaps go into
 the profile as TODO and get filled in during check-ins.
@@ -82,6 +83,17 @@ the profile as TODO and get filled in during check-ins.
 
 - `athlete/profile.md`, `athlete/equipment.yml`, `athlete/schedule.yml`,
   `athlete/nutrition.md`: replace every TODO you can.
+- The energy estimate in `nutrition.md` (skip it, and keep to protein and
+  fuelling, if the safety screening flagged disordered eating):
+  - BMR by Mifflin-St Jeor from Garmin's height, weight, age and sex:
+    10 × kg + 6.25 × cm − 5 × age, then +5 (men) or −161 (women).
+  - TDEE = BMR × an activity factor from their *actual* training
+    (`training_last_weeks`) plus daily life: about 1.4 for 1-3 sessions a
+    week and a desk job, 1.55 for 3-5, 1.7 for 6+ or long endurance
+    weeks. Give training-day and rest-day values as a ±10% range.
+  - Garmin's calorie numbers are rough: don't use them as the answer.
+    Confidence is LOW until a weight trend at a known intake confirms it
+    (`coach-weekly` recalibrates). Say this to the athlete in one line.
 - db via `log`:
   - `goals` (name, module, priority, metric, target_value, unit,
     baseline_value, baseline_date, target_date)

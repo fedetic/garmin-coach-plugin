@@ -41,7 +41,15 @@ planned_fill_trigger:      # required while PROJECTED
   basis: ["tested 1RM", "readiness green"]
 primary_adaptations: ["peak strength expression"]
 sessions_per_week: 4
-nutrition_target: "maintenance (peaking block)"
+nutrition:                 # daily targets for this block (coach-plan)
+  phase: maintenance       # surplus | maintenance | deficit
+  kcal: [2600, 2900]       # training-day range; omit when the safety screening says so
+  rest_day_kcal: [2300, 2600]
+  protein_g: 160           # 1.6-2.2 g/kg
+  carbs_g: [300, 380]
+  fat_g: [70, 90]
+  around_training: "Carbs and some protein 1-3 h before heavy days; 30-40 g protein after."
+  focus: ["Protein at every meal", "Same bedtime on training nights"]
 progression_strategy: >
   How load/volume/intensity move week to week, and what RPE overrides.
 deload_strategy: "weeks 4-5 taper"

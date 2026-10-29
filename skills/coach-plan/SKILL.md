@@ -49,7 +49,14 @@ and their logs/reviews.
 - Periodize effort inside the block: conservative week 1, building, then a
   deload or taper where the archetype calls for it.
 - Respect injuries: caps, swaps and monitoring rules go into `cautions`.
-- Nutrition target per block (surplus / maintenance / deficit) to match the phase.
+- Nutrition per block, as concrete daily targets from the athlete's energy
+  estimate (`nutrition.md`) and the block's phase: kcal range (surplus about
+  +5-10%, deficit at most about −20% and never during a peak or
+  high-volume block), protein 1.6-2.2 g/kg, fat at least about 0.6 g/kg,
+  carbs the rest (more on hard training days), what to eat around
+  training, and one or two habits to focus on. In `nutrition` (plan-format).
+  If the safety screening flagged disordered eating: protein and fuelling
+  only, no kcal or deficit.
 - Exit criteria that can actually be checked from data.
 
 ## Activation

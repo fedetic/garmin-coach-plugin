@@ -77,6 +77,11 @@ If the plan changes:
 If nothing changes, still push next week if any `block.next_week` session
 has `on_garmin: false`.
 
+Energy estimate (`nutrition.md`): with 2+ weeks of weight trend at a
+known, steady intake, recalibrate TDEE (stable weight means intake is about
+TDEE; about 7,700 kcal per kg of change) and raise its confidence. A
+changed TDEE changes the block's `nutrition` targets: edit and say so.
+
 Block finished (exit criteria met or time is up): run `coach-plan` to fill
 the next block (it was PROJECTED), then `coach-review` before activating.
 
