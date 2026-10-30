@@ -56,7 +56,12 @@ device or tool) can pick up.
   `record_metrics`, `readiness_report`, `estimate_1rm`, `prescribe_load`,
   `round_load`, `find_garmin_exercise`, `build_strength_workout`,
   `register_garmin_workout`, `import_activity`, `training_summary`,
-  `goal_progress`.
+  `goal_progress`. Whenever the athlete states or tests a number for a goal
+  metric (a new 1RM, a race time), `log` it to `manual_values` (source
+  `stated` or `tested`). It wins over Garmin's sets for that day (watches
+  miscount reps on failed attempts) and stays an e1RM goal's current value
+  until a later session beats it; without one, the best of the last 4 weeks,
+  so a light day's sets never read as their max.
 - **garmin server** (Garmin Connect read/write). Which calls return which
   metrics, and their quirks: `references/garmin-data.md`.
 

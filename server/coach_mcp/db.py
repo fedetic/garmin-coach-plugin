@@ -8,7 +8,7 @@ import sqlite3
 from pathlib import Path
 
 SCHEMA = Path(__file__).parent / "data" / "schema.sql"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Columns added after v1: (table, column, type). Applied to existing databases on connect.
 ADDED_COLUMNS = [
@@ -24,6 +24,7 @@ ENUMS = {
     ("checkins", "kind"): {"daily", "weekly", "block_review", "test"},
     ("checkins", "risk"): {"GREEN", "YELLOW", "ORANGE", "RED"},
     ("injuries", "status"): {"active", "monitoring", "resolved"},
+    ("manual_values", "source"): {"stated", "tested"},
 }
 
 
@@ -48,6 +49,7 @@ def connect(root: Path) -> sqlite3.Connection:
 
 
 def _migrate(con: sqlite3.Connection) -> None:
+    con.executescript(SCHEMA.read_text())   # tables added since (all CREATE ... IF NOT EXISTS)
     for table, col, typ in ADDED_COLUMNS:
         if col not in [r["name"] for r in con.execute(f"PRAGMA table_info({table})")]:
             con.execute(f"ALTER TABLE {table} ADD COLUMN {col} {typ}")

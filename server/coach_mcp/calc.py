@@ -2,6 +2,7 @@
 loads the athlete can actually build with their equipment."""
 from __future__ import annotations
 
+from datetime import date, timedelta
 from itertools import product
 
 # %1RM at RPE 10 for 1..12 reps (Tuchscherer/RTS chart). Each 0.5 RPE below 10
@@ -87,3 +88,47 @@ def round_load(target: float, implement: dict | None = None, mode: str = "neares
     if target > loads[-1]:
         out["warning"] = f"target exceeds the heaviest buildable load ({loads[-1]})"
     return out
+
+
+CURRENT_WEEKS = 4
+
+
+def goal_current(metric: str, series: list[tuple[str, float]], stated: list[tuple[str, float]],
+                 today: date) -> tuple[str, float, list[tuple[str, float]]] | None:
+    """A goal's current value (date, value) and the points its trend is fitted on.
+
+    series: (date, value) from the logs; stated: what the athlete gave or tested (manual_values,
+    the goal's baseline), oldest first. What the athlete says wins its day over the logs: a
+    watch miscounts reps (a failed 120 kg logged as 120 x 4 reads as a 134 kg max).
+
+    e1rm metrics: a session's best set is only near the max on a heavy day, and a light or volume
+    day reads far lower. So the latest stated value is current until a later session beats it,
+    or until it is older than CURRENT_WEEKS and sessions since show where the athlete is now.
+    Without one, the best of the last CURRENT_WEEKS weeks. The trend runs on weekly bests.
+    Other metrics: the latest value, the trend on every point."""
+    e1rm = metric.startswith("e1rm:")
+    said = {d[:10]: v for d, v in stated}
+    days: dict[str, float] = {}
+    for d, v in series:
+        days[d[:10]] = max(days.get(d[:10], v), v) if e1rm else v
+    days.update(said)
+    if not days:
+        return None
+    ordered = sorted(days.items())
+    if not e1rm:
+        return (*ordered[-1], ordered)
+    since = (today - timedelta(weeks=CURRENT_WEEKS)).isoformat()
+    best = lambda points: max(points, key=lambda p: p[1])  # noqa: E731
+    if said:
+        anchor = max(said.items())
+        after = [p for p in ordered if p[0] > anchor[0] and p[0] >= since]
+        cur = best(after) if after and (anchor[0] < since or best(after)[1] > anchor[1]) else anchor
+    else:
+        recent = [p for p in ordered if p[0] >= since]
+        cur = best(recent) if recent else ordered[-1]
+    weekly: dict[str, float] = {}
+    for d, v in ordered:
+        day = date.fromisoformat(d)
+        week = (day - timedelta(days=day.weekday())).isoformat()
+        weekly[week] = max(weekly.get(week, v), v)
+    return (*cur, sorted(weekly.items()))

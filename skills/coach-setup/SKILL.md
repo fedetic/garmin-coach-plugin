@@ -97,6 +97,9 @@ the profile as TODO and get filled in during check-ins.
 - db via `log`:
   - `goals` (name, module, priority, metric, target_value, unit,
     baseline_value, baseline_date, target_date)
+  - `manual_values` for each current number they give for a goal metric
+    (a 1RM, a race time: date, metric, value, unit, source `stated` or
+    `tested`), so `goal_progress` starts from it
   - `injuries`
   - `profile` key facts
   - `observations` for notable findings, e.g. "workout_rpe never set"

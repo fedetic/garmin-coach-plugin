@@ -87,7 +87,7 @@ def init_workspace(path: str, athlete_name: str = "", units: str = "kg", timezon
 @mcp.tool()
 def query(sql: str, params: list | None = None, limit: int = 200) -> list[dict]:
     """Read-only SQL (single SELECT/WITH) against the athlete database.
-    Tables: profile, goals, milestones, health_metrics, body_metrics, workouts, workout_sets,
+    Tables: profile, goals, milestones, manual_values, health_metrics, body_metrics, workouts, workout_sets,
     injuries, training_blocks, agent_reviews, plan_changes, observations, checkins, garmin_workouts.
     Use `PRAGMA table_info(<table>)` to see columns."""
     return db.query(_root(), sql, params, limit)
@@ -98,7 +98,9 @@ def log(table: str, records: list[dict]) -> dict:
     """Insert rows. Enums are validated: observations.type in fact|calculation|interpretation|
     hypothesis|decision, observations.confidence/milestones.confidence in HIGH|MEDIUM|LOW,
     agent_reviews.verdict in APPROVE|CONDITIONAL|REJECT, checkins.kind in daily|weekly|block_review|test,
-    checkins.risk in GREEN|YELLOW|ORANGE|RED, injuries.status in active|monitoring|resolved.
+    checkins.risk in GREEN|YELLOW|ORANGE|RED, injuries.status in active|monitoring|resolved,
+    manual_values.source in stated|tested (a max or time the athlete gives or tests, by goal
+    metric, e.g. {date, metric: "e1rm:BARBELL_BENCH_PRESS", value: 115, unit: "kg", source: "stated"}).
     Dates are ISO YYYY-MM-DD."""
     return {"table": table, "inserted_ids": db.insert(_con(), table, records)}
 
@@ -317,8 +319,12 @@ def goal_progress(weeks: int = 8) -> list[dict]:
     """For every active goal with a measurable `metric`, current value, distance to target,
     trend over the last `weeks` (least-squares slope per week) and a naive linear projection.
     metric conventions: e1rm:<GARMIN_EXERCISE> (e.g. e1rm:BARBELL_BENCH_PRESS), health:<metric>
-    (e.g. health:vo2max), body:weight_kg. Other metrics (race times, skills) are tracked through
-    milestones/observations and are reported as manual. The projection is a straight line - say so."""
+    (e.g. health:vo2max), body:weight_kg; any other name (a race time, a skill) has only what is
+    logged in manual_values. What the athlete states or tests (manual_values) and the goal's
+    baseline win their day over the logs. An e1rm goal's current value is the latest stated one
+    until a later session beats it, else the best of the last 4 weeks (a light day's sets read
+    low); its trend runs on weekly bests (calc.goal_current). The projection is a straight line -
+    say so."""
     out = []
     goals = db.query(_root(), "SELECT * FROM goals WHERE status='active' ORDER BY priority")
     cutoff = (date.today() - timedelta(weeks=weeks)).isoformat()
@@ -326,12 +332,17 @@ def goal_progress(weeks: int = 8) -> list[dict]:
         item = {"goal": g["name"], "metric": g["metric"], "target": g["target_value"], "unit": g["unit"],
                 "baseline": g["baseline_value"], "target_date": g["target_date"]}
         series = _goal_series(g["metric"] or "")
-        if not series:
-            item["status"] = "manual - no automatic series for this metric"
+        stated = [(r["date"], r["value"]) for r in db.query(
+            _root(), "SELECT date, value FROM manual_values WHERE metric=? ORDER BY date", [g["metric"] or ""])]
+        if g["metric"] and g["baseline_value"] is not None:
+            stated.append(((g["baseline_date"] or g["created_at"] or "")[:10], g["baseline_value"]))
+        found = calc.goal_current(g["metric"] or "", series, [p for p in stated if p[0]], date.today())
+        if not found:
+            item["status"] = "manual - no automatic series and nothing logged in manual_values"
             out.append(item)
             continue
-        cur_date, cur = series[-1]
-        recent = [(d, v) for d, v in series if d >= cutoff]
+        cur_date, cur, points = found
+        recent = [(d, v) for d, v in points if d >= cutoff]
         item.update(current=round(cur, 2), current_date=cur_date, n_points_window=len(recent))
         if g["target_value"] is not None:
             item["remaining"] = round(g["target_value"] - cur, 2)

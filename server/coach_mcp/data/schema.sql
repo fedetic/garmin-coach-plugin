@@ -24,6 +24,14 @@ CREATE TABLE IF NOT EXISTS milestones (
   status TEXT DEFAULT 'pending', achieved_at TEXT, achieved_value REAL
 );
 
+-- Values the athlete states or tests outside Garmin's logs (a 1RM they give or test, a race
+-- time, a skill count), by goal metric. goal_progress counts them with the metric's series.
+-- source: stated | tested
+CREATE TABLE IF NOT EXISTS manual_values (
+  id INTEGER PRIMARY KEY, date TEXT NOT NULL, metric TEXT NOT NULL, value REAL NOT NULL, unit TEXT,
+  source TEXT DEFAULT 'stated', note TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
 -- Daily wearable metrics, one row per (date, metric). Feed of the readiness tool.
 -- Canonical metric names: see readiness.METRICS.
 CREATE TABLE IF NOT EXISTS health_metrics (

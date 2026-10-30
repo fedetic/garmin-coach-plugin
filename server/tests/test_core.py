@@ -165,3 +165,27 @@ def test_opencode_leaves_commented_config_alone(tmp_path, monkeypatch, capsys):
     (cfg / "opencode.jsonc").write_text(text)
     opencode.install()
     assert (cfg / "opencode.jsonc").read_text() == text and '"coach"' in capsys.readouterr().out
+
+
+def test_goal_current_e1rm_is_what_the_athlete_said_until_training_beats_it():
+    today = date(2026, 10, 30)
+    sets = [("2026-10-06", 104.0), ("2026-10-20", 109.0), ("2026-10-28", 75.9)]   # the last a light day
+    cur_date, cur, weekly = calc.goal_current("e1rm:BARBELL_BENCH_PRESS", sets, [], today)
+    assert (cur_date, cur) == ("2026-10-20", 109.0)   # without a stated max: the recent best
+    assert weekly == [("2026-10-05", 104.0), ("2026-10-19", 109.0), ("2026-10-26", 75.9)]
+
+    # A test day the watch miscounted (a failed 120 logged as 120 x 4): the athlete's 115 wins its
+    # day and holds against the light day after it.
+    test = [*sets, ("2026-10-25", 134.5)]
+    cur_date, cur, weekly = calc.goal_current("e1rm:X", test, [("2026-10-25", 115.0)], today)
+    assert (cur_date, cur) == ("2026-10-25", 115.0) and ("2026-10-19", 115.0) in weekly
+    # A later session that beats it takes over.
+    assert calc.goal_current("e1rm:X", [*test, ("2026-10-29", 117.0)], [("2026-10-25", 115.0)], today)[1] == 117.0
+    # A stated max older than four weeks gives way to the sessions since.
+    assert calc.goal_current("e1rm:X", sets, [("2026-09-01", 120.0)], today)[:2] == ("2026-10-20", 109.0)
+    assert calc.goal_current("e1rm:X", [("2026-08-01", 90.0)], [("2026-09-01", 120.0)], today)[1] == 120.0
+
+    # Other metrics: the latest value; a stated one wins its day.
+    weight = [("2026-10-28", 84.0), ("2026-10-29", 84.4)]
+    assert calc.goal_current("body:weight_kg", weight, [("2026-10-29", 84.5)], today)[:2] == ("2026-10-29", 84.5)
+    assert calc.goal_current("10k_time", [], [], today) is None
