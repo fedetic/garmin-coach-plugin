@@ -3,7 +3,13 @@ name = "garmin-coach-mcp"
 version = "0.2.0"
 description = "Deterministic tools for the garmin-coach plugin: workspace, athlete database, readiness baselines, strength math, Garmin workout payloads."
 requires-python = ">=3.10"
-dependencies = ["mcp>=1.2,<2", "pyyaml>=6", "garminconnect==0.3.2"]
+dependencies = [
+    "mcp>=1.2,<2",
+    "pyyaml>=6",
+    "garminconnect==0.3.2",
+    # cryptography 49+ ships no Intel-Mac wheels; without this it compiles from source (needs Rust)
+    "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'",
+]
 
 [project.scripts]
 coach-mcp = "coach_mcp.server:main"

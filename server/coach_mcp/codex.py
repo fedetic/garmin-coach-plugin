@@ -22,6 +22,8 @@ BEGIN, END = "# >>> garmin-coach >>>", "# <<< garmin-coach <<<"
 GARMIN_MCP_REPO = "git+https://github.com/Taxuspt/garmin_mcp"
 # Pinned to a reviewed commit (only talks to connect.garmin.com; tokens 0600). Bump deliberately.
 GARMIN_MCP = f"{GARMIN_MCP_REPO}@202913fde53c9d15890d661fc9748dc6d0d5af52"
+# cryptography 49+ ships no Intel-Mac wheels; without this uv compiles it from source (needs Rust)
+GARMIN_MCP_WITH = "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'"
 
 
 def _paths() -> tuple[Path, Path]:
@@ -77,7 +79,7 @@ def install() -> None:
         "",
         "[mcp_servers.garmin]",
         'command = "uvx"',
-        f'args = ["--python", "3.12", "--from", {q(GARMIN_MCP)}, "garmin-mcp"]',
+        f'args = ["--python", "3.12", "--with", {q(GARMIN_MCP_WITH)}, "--from", {q(GARMIN_MCP)}, "garmin-mcp"]',
         "startup_timeout_sec = 120",
         END, "",
     ])

@@ -18,6 +18,8 @@ PLUGIN_DIR="$HOME/.garmin-coach/plugin"          # Codex and opencode
 WORKSPACE="$HOME/coach"
 # pinned to a reviewed commit: the login tool sees your password, the server your token
 GARMIN_MCP="git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52"
+# cryptography 49+ ships no Intel-Mac wheels; without this uv compiles it from source (needs Rust)
+GARMIN_MCP_WITH="cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'"
 export PATH="$HOME/.local/bin:$HOME/.cargo/bin:$PATH"
 
 step() { printf '\n\033[1m[%s] %s\033[0m\n' "$1" "$2"; }
@@ -77,7 +79,7 @@ if ls "$HOME/.garminconnect/"*.json >/dev/null 2>&1; then ok "already logged in 
 else
   echo "  Log in with your Garmin Connect email and password (and MFA code if you use one)."
   echo "  Your password is not stored, only a login token in ~/.garminconnect on this computer."
-  tty_in uvx --python 3.12 --from "$GARMIN_MCP" garmin-mcp-auth
+  tty_in uvx --python 3.12 --with "$GARMIN_MCP_WITH" --from "$GARMIN_MCP" garmin-mcp-auth
 fi
 
 step 6/6 "Your coaching folder"

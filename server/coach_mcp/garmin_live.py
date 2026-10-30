@@ -14,7 +14,7 @@ import time
 from datetime import date, timedelta
 
 AUTH_HINT = ("Garmin login missing or expired. Run once in a terminal: "
-             "uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52 garmin-mcp-auth")
+             "uvx --python 3.12 --with \"cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'\" --from git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52 garmin-mcp-auth")
 
 _client = None
 

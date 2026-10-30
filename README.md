@@ -185,7 +185,7 @@ plugin into `~/.config/opencode/`. Remove with `... coach-opencode uninstall`.
 
 All systems:
 ```sh
-uvx --python 3.12 --from git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52 garmin-mcp-auth
+uvx --python 3.12 --with "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'" --from git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52 garmin-mcp-auth
 ```
 Run it again whenever the coach says the Garmin login has expired.
 </details>

@@ -20,7 +20,7 @@ import os
 import sys
 from pathlib import Path
 
-from .codex import BEGIN, GARMIN_MCP, GARMIN_MCP_REPO, PLUGIN_ROOT, SERVER, _link, _unlink
+from .codex import BEGIN, GARMIN_MCP, GARMIN_MCP_REPO, GARMIN_MCP_WITH, PLUGIN_ROOT, SERVER, _link, _unlink
 from .codex import _paths as codex_paths
 
 AGENT = """---
@@ -82,7 +82,8 @@ def _servers(with_garmin: bool) -> dict:
         "coach": {"type": "local", "enabled": True, "timeout": 60000,
                   "command": ["uv", "run", "--quiet", "--frozen", "--project", SERVER.as_posix(), "coach-mcp"]},
         "garmin": {"type": "local", "enabled": with_garmin, "timeout": 120000,
-                   "command": ["uvx", "--python", "3.12", "--from", GARMIN_MCP, "garmin-mcp"]},
+                   "command": ["uvx", "--python", "3.12", "--with", GARMIN_MCP_WITH,
+                               "--from", GARMIN_MCP, "garmin-mcp"]},
     }
 
 
