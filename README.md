@@ -3,15 +3,16 @@
 An adaptive training coach that runs inside your own AI assistant (Claude
 Code, Claude Desktop, OpenAI Codex, or opencode with a local model) on your own
 subscription or hardware. It creates your workouts and puts them where you
-train: on your **Garmin** watch, in your **Hevy** app, or, with neither, in the
-chat. Setup starts by asking which of those you use.
+train: on a **Garmin** watch, in a connected training app (today **Hevy**), or,
+with neither, in the chat. Setup starts by asking which of those you use.
 
-> **Using Claude Desktop, Hevy, or an Apple Watch?** See the
-> [Claude Desktop + Hevy guide](docs/claude-desktop-hevy.md): no Garmin needed.
+> **No Garmin watch, or using Claude Desktop?** See
+> [Use the coach without a Garmin watch](docs/without-garmin.md): what works
+> with what, and a Claude Desktop setup.
 
-- **Onboarding**: asks which apps you use (Garmin? Hevy?), reads their history
-  first (Garmin: activities, lifts, VO2max, HRV/sleep baselines; Hevy: your
-  logged lifts), then asks about goals, injuries, schedule, equipment and
+- **Onboarding**: asks which apps you use, reads the connected ones first
+  (Garmin: activities, lifts, VO2max, HRV/sleep baselines; Hevy: your logged
+  lifts), then asks about goals, injuries, schedule, equipment and
   food, one topic at a time.
 - **Long-term plan**: measurable goals, a milestone ladder, and training
   blocks (base, build, peak, test, deload) detailed only when they're close.
@@ -40,10 +41,11 @@ no athlete data. What does leave your computer, and to whom, is spelled out in
 ## What you need
 
 - Optional, any of: a Garmin watch synced to a **Garmin Connect** account
-  (recovery data and workouts on the watch); the **Hevy** app with **Hevy Pro**
-  (your lifts are read, your plan is written into it as routines); or neither
-  (the coach works from conversation). Apple Watch, Whoop and Oura aren't
-  connected yet: the coach asks about sleep and soreness instead
+  (recovery data and workouts on the watch); a connected training app, today
+  **Hevy** with **Hevy Pro** (your lifts are read, your plan is written into it
+  as routines); or neither (the coach works from conversation). Other watches
+  and apps aren't connected yet: the coach asks about sleep and soreness
+  instead, and you tell it what you trained
 - A **Claude Pro or Max** plan (for Claude Code or Claude Desktop), a ChatGPT
   plan that includes **Codex**, *or* [opencode](https://opencode.ai) with any
   provider, including a local model on your own GPU (see [Local models](#local-models-opencode))
@@ -72,7 +74,7 @@ irm https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/s
 ```
 
 <details>
-<summary>Using Claude Desktop (Cowork), Hevy, or no Garmin?</summary>
+<summary>Using Claude Desktop (Cowork), or no Garmin watch?</summary>
 
 The setup asks "Do you have a Garmin watch?" and then "Do you log your workouts
 in Hevy?", and only does the logins you need. To skip the questions:
@@ -81,7 +83,7 @@ in Hevy?", and only does the logins you need. To skip the questions:
 
 For Claude Desktop, add `--desktop` (Windows: `$env:COACH_TOOL="desktop"`). It
 prepares your computer, and you add the plugin inside the app. Full walkthrough:
-[docs/claude-desktop-hevy.md](docs/claude-desktop-hevy.md).
+[docs/without-garmin.md](docs/without-garmin.md).
 
 ```sh
 # Mac / Linux
@@ -262,8 +264,8 @@ loads the right skill.
 
 ### A typical week
 
-(Shown for Garmin. With Hevy the plan lands in your Hevy routines instead of
-on a watch calendar; see the [Hevy guide](docs/claude-desktop-hevy.md#a-typical-week).)
+(Shown for Garmin. With a connected training app the plan lands there instead of
+on a watch calendar; see the [no-Garmin guide](docs/without-garmin.md#a-typical-week).)
 
 ```mermaid
 flowchart LR
