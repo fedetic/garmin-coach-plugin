@@ -17,11 +17,15 @@ Ask these two, one at a time, before anything else. Plain words, no jargon:
 
 1. "Do you have a **Garmin** watch that syncs to Garmin Connect?" Yes means
    `garmin: true`: recovery data and workouts on the watch.
-2. "Do you log your workouts in the **Hevy** app?" (Only if you want to:
-   if they say no, don't push it.) Yes means `hevy: true`: the coach reads
-   what you lifted and writes your plan into Hevy as routines. It needs
-   **Hevy Pro**. If they have Hevy but not Pro, say what they'd get without
-   it: the coach still plans, they enter the sessions in Hevy by hand.
+2. "Do you log your workouts in a training app?" If they name **Hevy**, that
+   is `hevy: true`: the coach reads what they lifted and writes the plan into
+   Hevy as routines. It needs **Hevy Pro**. If they have Hevy but not Pro, say
+   what they'd get without it: the coach still plans, they enter the sessions
+   in Hevy by hand. Hevy is the only training app connected today. For any
+   other app (Strong, Fitbod, JEFIT, a spreadsheet, paper), say plainly that it
+   isn't connected: they log as usual and tell you how sessions went, and you
+   write each week's plan in the chat and in `plan/`. Keep `hevy: false`, note
+   the app in `profile.md`, and don't suggest switching apps.
 
 If the answer to 1 is no, also ask which watch or ring they use, if any
 (Apple Watch, Whoop, Oura, Fitbit...). Tell them plainly that only Garmin is

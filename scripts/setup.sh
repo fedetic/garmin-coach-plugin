@@ -133,7 +133,7 @@ This computer is ready. Two things left, in Claude Desktop:
      then install "garmin-coach".
   2. Start a Cowork task, choose the folder ~/coach, and type:  set me up as a new athlete
 
-Full walkthrough: docs/claude-desktop-hevy.md in the repository.
+Full walkthrough: docs/without-garmin.md in the repository.
 EOF
 else
 cat <<EOF

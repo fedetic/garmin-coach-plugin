@@ -243,7 +243,7 @@ if ($Tool -eq "desktop") {
   Write-Host "     then install 'garmin-coach'."
   Write-Host "  2. Start a Cowork task, choose the folder ~\coach, and type:  set me up as a new athlete"
   Write-Host ""
-  Write-Host "Full walkthrough: docs/claude-desktop-hevy.md in the repository."
+  Write-Host "Full walkthrough: docs/without-garmin.md in the repository."
 } else {
   Write-Host "All set. Start coaching:" -ForegroundColor Green
   Write-Host ""

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Claude Desktop and Hevy Guide</title>
+<title>Coach Without Garmin</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500&display=swap">
@@ -115,23 +115,24 @@
 <body>
 <div class="wrap">
   <header>
-    <span class="kicker">garmin-coach · setup guide</span>
-    <h1>Your own coach in Claude Desktop, with your workouts in Hevy</h1>
-    <p class="lede">No Garmin needed. You talk to the coach in the Claude Desktop app. It builds your plan, adjusts it as you train, and writes each week's workouts into your <strong>Hevy</strong> app as routines you start with one tap. You log lifting in Hevy as you always do, and the coach reads it back to see how the week went.</p>
+    <span class="kicker">garmin-coach · no Garmin watch needed</span>
+    <h1>Use the coach without a Garmin watch</h1>
+    <p class="lede">You don't need a Garmin watch. You talk to the coach in the Claude Desktop app. It builds your plan, adjusts it as you train, and keeps track of how it goes. If you log your training in a connected app, the coach reads it from there and writes each week's workouts back into it. Today that app is <strong>Hevy</strong>; with any other app, or none, the coach works from what you tell it.</p>
   </header>
 
   <nav class="toc" aria-label="Contents">
     <ul>
       <li><a href="#get">What you get</a></li>
+      <li><a href="#works">What works with what</a></li>
       <li><a href="#need">What you need</a></li>
       <li><a href="#setup">Set up</a></li>
       <li><a href="#first">First conversation</a></li>
       <li><a href="#week">A typical week</a></li>
-      <li><a href="#hevy">Plans in Hevy</a></li>
-      <li><a href="#watch">Apple Watch</a></li>
+      <li><a href="#hevy">If you use Hevy</a></li>
+      <li><a href="#watch">Watches and apps</a></li>
       <li><a href="#privacy">Privacy</a></li>
       <li><a href="#help">Troubleshooting</a></li>
-      <li><a href="#nopro">Without Pro</a></li>
+      <li><a href="#nopro">App not connected</a></li>
     </ul>
   </nav>
 
@@ -143,9 +144,22 @@
       <div class="card"><h3>A plan that adapts</h3><p>Every week it compares what you lifted with what was planned, and changes next week only when the evidence says so: progress, hold, deload, or work around a sore shoulder.</p></div>
       <div class="card"><h3>A morning check</h3><p>A one-minute "should I train today?": how you slept and feel, any pain, then GO, MODIFY (lighter or shorter) or REST, with the specific change.</p></div>
       <div class="card"><h3>Specialist review</h3><p>Every block is reviewed before it starts (programming, recovery, injury risk, nutrition), with calorie and protein targets per block.</p></div>
-      <div class="card"><h3>Workouts in Hevy</h3><p>Weights worked out and rounded to what you can load. Nothing to copy by hand.</p></div>
+      <div class="card"><h3>Weights worked out</h3><p>Rounded to what you can load. With a connected app (Hevy today) the week's workouts land in the app, so there is nothing to copy by hand.</p></div>
     </div>
     <p>It is a coach built from sound training principles, not a doctor. Tell it about pain and injuries, and see a professional for anything that worries you.</p>
+  </section>
+
+  <section id="works">
+    <h2>What works with what</h2>
+    <p>The coach uses two kinds of apps, and both are optional: a <strong>watch or ring</strong> for recovery data (sleep, HRV, resting heart rate), and a <strong>training log app</strong> where you record your sets.</p>
+    <div class="tablebox"><table class="wide">
+      <tr><th>App</th><th>Status</th><th>What the coach does with it</th></tr>
+      <tr><td>Garmin watch</td><td>Connected</td><td>Reads recovery data and training, puts workouts on the watch (see the README).</td></tr>
+      <tr><td>Hevy (needs Hevy Pro)</td><td>Connected</td><td>Reads your logged lifts, writes each week's plan into it as routines.</td></tr>
+      <tr><td>Apple Watch, Whoop, Oura, Fitbit</td><td>Not connected</td><td>Asks a few quick questions each morning instead (sleep, soreness, pain).</td></tr>
+      <tr><td>Other training apps (Strong, Fitbod, JEFIT, a spreadsheet, paper)</td><td>Not connected</td><td>You log as usual and tell the coach how it went. It writes each week's plan in the chat and in your <code>plan/</code> folder to follow or copy.</td></tr>
+    </table></div>
+    <p>More apps can be added over time. Nothing is lost by starting without one: the plan, the weekly check-ins and the morning check all work from conversation.</p>
   </section>
 
   <section id="need">
@@ -153,7 +167,7 @@
     <div class="tablebox"><table class="wide">
       <tr><th>Requirement</th><th>Details</th></tr>
       <tr><td>Claude Desktop with Cowork</td><td>Mac or Windows. Cowork needs a paid Claude plan. Download at <a href="https://claude.ai/download">claude.ai/download</a>.</td></tr>
-      <tr><td>Hevy Pro</td><td>Hevy only lets Pro accounts use its API. Without it, see <a href="#nopro">below</a>.</td></tr>
+      <tr><td>A connected app (optional)</td><td>For Hevy: Hevy Pro, because Hevy only lets Pro accounts use its API. Without one, see <a href="#nopro">below</a>.</td></tr>
       <tr><td>Your own computer</td><td>The coach's small helper program runs on it and keeps your data in a folder there, <code>~/coach</code>.</td></tr>
     </table></div>
   </section>
@@ -169,9 +183,9 @@
       <p>It then asks two questions:</p>
       <ol>
         <li><em>Do you have a Garmin watch?</em> Answer <strong>n</strong>.</li>
-        <li><em>Do you log your workouts in the Hevy app?</em> Answer <strong>y</strong>, then paste your Hevy key when asked. Nothing shows as you type.</li>
+        <li><em>Do you log your workouts in the Hevy app?</em> Answer <strong>y</strong> if you do, then paste your Hevy key when asked (nothing shows as you type). Answer <strong>n</strong> if you use another app or none: you skip the key and nothing else changes.</li>
       </ol>
-      <div class="note"><b>Your Hevy key</b><span>In Hevy's web app (hevy.com) open Settings, then <strong>Developer</strong>, and create an API key (<a href="https://hevy.com/settings?developer">hevy.com/settings?developer</a>). The setup command asks for it once and saves it only on your computer, in <code>~/.hevy/api-key</code>, readable only by you. Never paste the key into the chat: the coach never needs you to.</span></div>
+      <div class="note"><b>Only if you use Hevy: your Hevy key</b><span>In Hevy's web app (hevy.com) open Settings, then <strong>Developer</strong>, and create an API key (<a href="https://hevy.com/settings?developer">hevy.com/settings?developer</a>). The setup command asks for it once and saves it only on your computer, in <code>~/.hevy/api-key</code>, readable only by you. Never paste the key into the chat: the coach never needs you to.</span></div>
       <p>The command is safe to run again if it stops halfway.</p>
     </div></div>
 
@@ -198,10 +212,10 @@
     <h2>Your first conversation</h2>
     <p>About 20 to 30 minutes, once. The coach asks one topic at a time:</p>
     <ol>
-      <li><strong>Your apps.</strong> "Do you have a Garmin watch?" (no) and "Do you log in Hevy?" (yes). If you wear another watch, say which.</li>
-      <li><strong>What it can see.</strong> It reads your last 12 weeks from Hevy and tells you what it found: how often you train, your main lifts and heaviest sets, whether you log effort. Correct anything it got wrong.</li>
+      <li><strong>Your apps.</strong> Whether you have a Garmin watch and whether you use a connected training app. Say which other watch or app you use, if any.</li>
+      <li><strong>What it can see.</strong> With a connected app it reads your last 12 weeks and tells you what it found: how often you train, your main lifts and heaviest sets, whether you log effort. Correct anything it got wrong. Without one, it asks you for the same things.</li>
       <li><strong>You.</strong> Goals and deadlines, injuries, schedule, equipment, how you eat and sleep. Short answers are fine; "not sure" is fine.</li>
-      <li><strong>Your first plan.</strong> A roadmap, the first block in detail, a specialist review, and then <strong>week 1 appears in Hevy</strong> in a folder called <em>Coach</em>.</li>
+      <li><strong>Your first plan.</strong> A roadmap, the first block in detail, a specialist review, and then <strong>week 1 is ready</strong>: in your connected app (Hevy: in a folder called <em>Coach</em>), or written out in the chat if you have none.</li>
     </ol>
   </section>
 
@@ -209,18 +223,18 @@
     <h2>A typical week</h2>
     <div class="tablebox"><table class="wide">
       <tr><th>When</th><th>You</th><th>The coach</th></tr>
-      <tr><td>Morning of a training day (1 min)</td><td>Say "morning check". Answer: sleep, energy, soreness, any pain.</td><td>GO, MODIFY or REST, and changes today's routine in Hevy if needed.</td></tr>
-      <tr><td>Training</td><td>Open the routine in Hevy and start it from there. Log your sets as usual. RPE too, if you can: it makes the coach noticeably better.</td><td>Nothing.</td></tr>
+      <tr><td>Morning of a training day (1 min)</td><td>Say "morning check". Answer: sleep, energy, soreness, any pain.</td><td>GO, MODIFY or REST, and changes today's workout if needed.</td></tr>
+      <tr><td>Training</td><td>Do the planned workout and log your sets as usual (with Hevy, start it from the routine). RPE too, if you can: it makes the coach noticeably better.</td><td>Nothing.</td></tr>
       <tr><td>Rest days</td><td>Nothing.</td><td>Nothing.</td></tr>
-      <tr><td>Check-in day (you pick it, e.g. Sunday, 5 to 10 min)</td><td>Say "weekly check-in". Answer a few questions: missed sessions, pain, sleep, life.</td><td>Reads your Hevy week, reports progress against the plan, changes next week only if the data justifies it, and <strong>updates your Hevy routines for the week</strong>.</td></tr>
+      <tr><td>Check-in day (you pick it, e.g. Sunday, 5 to 10 min)</td><td>Say "weekly check-in". Answer a few questions: missed sessions, pain, sleep, life.</td><td>Reads your week (from your connected app, or from what you tell it), reports progress against the plan, changes next week only if the data justifies it, and <strong>puts next week's workouts in your app</strong>.</td></tr>
       <tr><td>End of a block (every 3 to 8 weeks)</td><td>Nothing extra.</td><td>Plans and reviews the next block inside the weekly check-in.</td></tr>
     </table></div>
-    <p>Just tell it when things change: "my knee hurts on squats", "travelling next week, hotel gym only", "I can only train three days now". It adjusts the plan and your routines.</p>
+    <p>Just tell it when things change: "my knee hurts on squats", "travelling next week, hotel gym only", "I can only train three days now". It adjusts the plan and your workouts.</p>
   </section>
 
   <section id="hevy">
-    <h2>How your plan shows up in Hevy</h2>
-    <p>Hevy has no calendar, so the coach works with what Hevy does have.</p>
+    <h2>If you use Hevy: how your plan shows up</h2>
+    <p>This section is for the one connected app. For other apps, see <a href="#works">what works with what</a>. Hevy has no calendar, so the coach works with what Hevy does have.</p>
     <ul>
       <li><strong>One routine per planned session</strong>, in a folder called <strong>Coach</strong>, named like <code>Mon - Bench heavy (wk3)</code>. The routine's note says the planned day.</li>
       <li><strong>The same routine is updated each week</strong> with that week's weights, sets and reps. Your library doesn't fill up with old weeks, and your logged history is never touched.</li>
@@ -233,10 +247,10 @@
   </section>
 
   <section id="watch">
-    <h2>Apple Watch and other watches</h2>
+    <h2>Watches and other apps</h2>
     <p>Only Garmin is connected as a recovery source today. That doesn't hold you back much:</p>
     <ul>
-      <li><strong>Hevy has its own Apple Watch app.</strong> Log your sets on your wrist and the coach reads them from Hevy like any others.</li>
+      <li><strong>A watch only matters for recovery data and for logging.</strong> If your training app has a watch app (Hevy has Apple Watch and Wear OS apps), log your sets on your wrist and the coach reads them from the app like any others.</li>
       <li><strong>Sleep, HRV and resting heart rate from Apple Health, Whoop, Oura or Fitbit are not read.</strong> In their place the morning check asks about sleep, soreness, pain and stress. The sleep hours you give are saved, and after a few weeks the coach compares you with your own normal, the way a watch would.</li>
       <li>Your watch still does its own job (heart rate, steps, runs). The coach just doesn't see it. Tell it about anything that matters.</li>
     </ul>
@@ -245,10 +259,10 @@
   <section id="privacy">
     <h2>Privacy</h2>
     <ul>
-      <li>Your coaching folder (<code>~/coach</code>) and your Hevy key (<code>~/.hevy/api-key</code>) stay on your computer.</li>
-      <li>The coach's helper program talks to one place only: Hevy (<code>api.hevyapp.com</code>), plus git if you turn on sync between computers. No telemetry, no server of ours. It is open source: read every line in the repository.</li>
+      <li>Your coaching folder (<code>~/coach</code>) stays on your computer, and so does your Hevy key (<code>~/.hevy/api-key</code>) if you use Hevy.</li>
+      <li>The coach's helper program talks only to the services you connect (Hevy at <code>api.hevyapp.com</code>, Garmin Connect), plus git if you turn on sync between computers. With none connected it talks to nothing. No telemetry, no server of ours. It is open source: read every line in the repository.</li>
       <li>The AI model reads what the coach reads: your workouts, weight, injuries and your answers. In Claude Desktop that goes to Anthropic, under your plan's terms. Check your privacy settings, in particular whether chats may be used for training. The coach only needs what you choose to tell it: a name is optional and no medical history is required.</li>
-      <li>The Hevy key can read and write your Hevy account. Treat it like a password; revoke it in Hevy's Developer settings if you ever think it leaked.</li>
+      <li>If you use Hevy: the key can read and write your Hevy account. Treat it like a password; revoke it in Hevy's Developer settings if you ever think it leaked.</li>
       <li>More detail: Security and privacy in the repository README.</li>
     </ul>
   </section>
@@ -257,27 +271,27 @@
     <h2>If something doesn't work</h2>
     <div class="tablebox"><table class="wide">
       <tr><th>Symptom</th><th>Try</th></tr>
-      <tr><td>The coach says the Hevy key is missing or rejected</td><td>Run the setup command from step 1 again; it asks for the key again. Check the key in Hevy's Developer settings, and that the account is Pro.</td></tr>
+      <tr><td>(Hevy) The coach says the key is missing or rejected</td><td>Run the setup command from step 1 again; it asks for the key again. Check the key in Hevy's Developer settings, and that the account is Pro.</td></tr>
       <tr><td>Desktop doesn't offer the coach's tools, or "the coach server isn't available"</td><td>Run the step 1 command again (it re-prepares <code>uv</code> and the helper), restart Claude Desktop, and start a new Cowork task. The helper is a local program, so work in Cowork on your own computer rather than a plain chat or a cloud session.</td></tr>
       <tr><td>"command not found" or "not recognized" after setup</td><td>Close the terminal, open a new one, run the command again.</td></tr>
-      <tr><td>A routine in Hevy looks wrong</td><td>Tell the coach which one. It re-sends it and reads it back; if Hevy still stores it differently, it tells you exactly what differs.</td></tr>
-      <tr><td>"Routine limit" error</td><td>The Hevy account isn't Pro. See below.</td></tr>
-      <tr><td>You'd rather use the terminal</td><td>The same coach runs in Claude Code, Codex and opencode (see the README quick start). Answer <em>no</em> to Garmin and <em>yes</em> to Hevy.</td></tr>
+      <tr><td>(Hevy) A routine looks wrong</td><td>Tell the coach which one. It re-sends it and reads it back; if Hevy still stores it differently, it tells you exactly what differs.</td></tr>
+      <tr><td>(Hevy) "Routine limit" error</td><td>The Hevy account isn't Pro. See below.</td></tr>
+      <tr><td>You'd rather use the terminal</td><td>The same coach runs in Claude Code, Codex and opencode (see the README quick start). Answer <em>no</em> to Garmin, and <em>yes</em> to Hevy if you use it.</td></tr>
     </table></div>
   </section>
 
   <section id="nopro">
-    <h2>Without Hevy Pro, or without Hevy</h2>
-    <p>The coach still works. Answer <em>no</em> to the Hevy question in setup:</p>
+    <h2>If your app isn't connected</h2>
+    <p>That covers Hevy without Pro, any other training app, and no app at all. The coach still works. Answer <em>no</em> to the Hevy question in setup:</p>
     <ul>
       <li>You get the plan, the weekly check-ins and the morning check, all driven by conversation. The coach writes each week's sessions out in the chat (and in your <code>plan/</code> folder) for you to follow or copy into the app you use.</li>
-      <li>After a session, tell it how it went (loads, reps, effort). It uses that the same way it would use Hevy's log.</li>
+      <li>After a session, tell it how it went (loads, reps, effort). It uses that the same way it would use a connected app's log.</li>
       <li>If you get Hevy Pro later, say "I use Hevy now" and it switches on.</li>
     </ul>
-    <div class="note warn"><b>Status</b><span>The Hevy connection follows Hevy's published API and is tested against a simulated Hevy, not yet against many real accounts. Hevy states that its API may change. If a routine or a sync misbehaves, tell the coach and <a href="https://github.com/fedetic/garmin-coach-plugin/issues">open an issue</a>.</span></div>
+    <div class="note warn"><b>Status</b><span>The Hevy connection (the only connected training app today) follows Hevy's published API and is tested against a simulated Hevy, not yet against many real accounts. Hevy states that its API may change. If a routine or a sync misbehaves, tell the coach and <a href="https://github.com/fedetic/garmin-coach-plugin/issues">open an issue</a>.</span></div>
   </section>
 
-  <footer>Same guide as <code>docs/claude-desktop-hevy.md</code> in the garmin-coach plugin repository (the markdown version reads well on GitHub). Open this file in a browser for the styled version.</footer>
+  <footer>Same guide as <code>docs/without-garmin.md</code> in the garmin-coach plugin repository (the markdown version reads well on GitHub). Open this file in a browser for the styled version.</footer>
 </div>
 
 <script>
