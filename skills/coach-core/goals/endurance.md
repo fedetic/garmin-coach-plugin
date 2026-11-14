@@ -1,7 +1,11 @@
 # Goal module: endurance
 
 For VO2max, race times (5k to marathon, triathlon, cycling events) and
-general aerobic fitness. This is the module that uses Garmin's data most heavily.
+general aerobic fitness. This is the module that uses Garmin's data most heavily:
+without a Garmin watch (`integrations.garmin: false`) there is no VO2max, no
+HR zones to pull and no way to push run structures, so set goals on what the
+athlete can time or measure themselves (a race or time-trial result in
+`manual_values`) and describe each session in the check-in.
 
 ## Making it measurable
 

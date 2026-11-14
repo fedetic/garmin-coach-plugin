@@ -18,7 +18,7 @@ from pathlib import Path
 
 import yaml
 
-from . import calc, db, garmin, garmin_live as gl, readiness
+from . import calc, db, garmin, garmin_live as gl, readiness, workspace
 
 WEEKDAYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"]
 BODY = ("weight_kg", "body_fat_pct")
@@ -367,23 +367,30 @@ def sync_since(root: Path, start: str = "", end: str = "") -> dict:
     }
 
 
-def _block_outlook(root: Path, con, day: date) -> dict | None:
-    """Where the active block stands, and next week's sessions with their Garmin push status."""
+def _block_outlook(root: Path, con, day: date, source: str = "garmin") -> dict | None:
+    """Where the active block stands, and next week's sessions with their push status
+    (`on_garmin`, or `in_hevy` for source="hevy")."""
     row, block = _active_block(root, con)
     if not block:
         return None
     week = week_of(block, row, day) or 1
     nxt = week + 1
     dur = block.get("duration_weeks")
-    pushed = {r["session"] for r in con.execute(
-        "SELECT session FROM garmin_workouts WHERE block_id=? AND week=? AND status='scheduled'",
-        (block.get("id"), nxt))}
+    flag = "in_hevy" if source == "hevy" else "on_garmin"
+    if source == "hevy":
+        pushed = {r["session"] for r in con.execute(
+            "SELECT session FROM hevy_routines WHERE block_id=? AND week=? AND status='active'",
+            (block.get("id"), nxt))}
+    else:
+        pushed = {r["session"] for r in con.execute(
+            "SELECT session FROM garmin_workouts WHERE block_id=? AND week=? AND status='scheduled'",
+            (block.get("id"), nxt))}
     sessions = []
     if not dur or nxt <= dur:
         for sess in block.get("sessions", []):
             when = session_date(block, row, sess, nxt)
             sessions.append({**session_summary(sess, nxt), "date": when.isoformat() if when else None,
-                             "on_garmin": sess.get("id") in pushed})
+                             flag: sess.get("id") in pushed})
     return {"id": block.get("id"), "name": block.get("name"), "week": week, "of_weeks": dur,
             "ends_after_this_week": bool(dur and week >= dur),
             "exit_criteria": block.get("exit_criteria") or None, "cautions": block.get("cautions") or None,
@@ -658,6 +665,7 @@ def validate_block(root: Path, block: str = "") -> dict:
     if not path or not path.exists():
         return {"ok": False, "errors": [f"block {block or '(active)'} not found under plan/blocks"]}
     errors, warnings = [], []
+    integ = workspace.integrations(workspace.settings(root))
     try:
         b = yaml.safe_load(path.read_text()) or {}
     except yaml.YAMLError as e:
@@ -713,19 +721,21 @@ def validate_block(root: Path, block: str = "") -> dict:
                 warnings.append(f"{where} has an override for week {wk} but the block is {weeks} weeks")
         kind = s.get("kind", "strength")
         if kind != "strength" and not s.get("structure"):
-            warnings.append(f"{where} no `structure`: shown in the plan but not pushed to Garmin")
+            warnings.append(f"{where} no `structure`: shown in the plan but not pushed to Garmin" if integ["garmin"]
+                            else f"{where} no `structure`: shown in the plan only")
             continue
         prev: dict[str, float] = {}
         for week in range(1, max(weeks, 1) + 1):
             tag = f"{where} wk{week}"
-            try:
-                built = build_session(s, f"check {sid}", week)
-            except (ValueError, KeyError, TypeError) as e:
-                errors.append(f"{tag} can't be built for Garmin: {e}")
-                break
-            for w in built["warnings"]:  # a wrong key or target loses intent silently; a missing mapping doesn't
-                bad = "not in Garmin's taxonomy" in w or "not understood" in w
-                (errors if bad else warnings).append(f"{tag} {w}")
+            if integ["garmin"]:   # Garmin-buildability only matters when the plan goes to a Garmin watch
+                try:
+                    built = build_session(s, f"check {sid}", week)
+                except (ValueError, KeyError, TypeError) as e:
+                    errors.append(f"{tag} can't be built for Garmin: {e}")
+                    break
+                for w in built["warnings"]:  # a wrong key or target loses intent silently; a missing mapping doesn't
+                    bad = "not in Garmin's taxonomy" in w or "not understood" in w
+                    (errors if bad else warnings).append(f"{tag} {w}")
             if kind == "strength":
                 minutes = _strength_minutes(s, week)
                 for e in s.get("exercises", []):
@@ -735,6 +745,9 @@ def validate_block(root: Path, block: str = "") -> dict:
                         errors.append(f"{tag} {ex}: needs reps or duration_sec")
                     if not p.get("sets"):
                         warnings.append(f"{tag} {ex}: no sets (1 assumed)")
+                    if integ["hevy"] and week == 1 and not (p.get("hevy") or {}).get("template_id"):
+                        warnings.append(f"{tag} {ex}: no `hevy: {{template_id}}` - hevy_push_week will look it up "
+                                        "by name and skip the session unless exactly one Hevy exercise matches")
                     if p.get("pct_1rm") and float(p["pct_1rm"]) > 1.0:
                         errors.append(f"{tag} {ex}: pct_1rm {p['pct_1rm']} > 1.0 (write 0.85, not 85)")
                     if p.get("pct_1rm") and not p.get("weight_kg"):

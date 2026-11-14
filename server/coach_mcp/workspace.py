@@ -66,8 +66,30 @@ def settings(root: Path) -> dict:
     return yaml.safe_load((root / MARKER).read_text()) or {}
 
 
+def integrations(cfg: dict) -> dict:
+    """Which data sources this athlete uses. A workspace made before this setting existed
+    (no `integrations` key) keeps behaving as it always did: Garmin on, Hevy off."""
+    i = cfg.get("integrations")
+    if not isinstance(i, dict):
+        return {"garmin": True, "hevy": False}
+    return {"garmin": bool(i.get("garmin", True)), "hevy": bool(i.get("hevy", False))}
+
+
+def set_integrations(root: Path, garmin: bool | None = None, hevy: bool | None = None) -> dict:
+    cfg = settings(root)
+    cur = integrations(cfg)
+    if garmin is not None:
+        cur["garmin"] = garmin
+    if hevy is not None:
+        cur["hevy"] = hevy
+    cfg["integrations"] = cur
+    (root / MARKER).write_text(yaml.safe_dump(cfg, sort_keys=False))
+    return cur
+
+
 def init(path: str, athlete_name: str = "", units: str = "kg", timezone: str = "",
-         checkin_day: str = "Sunday") -> tuple[Path, list[str]]:
+         checkin_day: str = "Sunday", garmin: bool | None = None, hevy: bool | None = None
+         ) -> tuple[Path, list[str]]:
     """Copy templates into `path` without overwriting anything that exists."""
     root = Path(path).expanduser().resolve()
     root.mkdir(parents=True, exist_ok=True)
@@ -86,6 +108,8 @@ def init(path: str, athlete_name: str = "", units: str = "kg", timezone: str = "
         "athlete": athlete_name, "units": units, "timezone": timezone, "weekly_checkin_day": checkin_day,
     }.items() if v})
     (root / MARKER).write_text(yaml.safe_dump(cfg, sort_keys=False))
+    if garmin is not None or hevy is not None:
+        set_integrations(root, garmin, hevy)
     (root / "plan" / "blocks").mkdir(parents=True, exist_ok=True)
     set_active(root)
     return root, created

@@ -1,6 +1,6 @@
 ---
 name: coach-weekly
-description: Weekly check-in for the garmin-coach - pulls the week's Garmin training and recovery data, compares it to the block plan and the athlete's baselines, classifies progress (AHEAD to AT RISK) with facts separated from hypotheses, applies justified plan changes, and pushes next week's workouts to Garmin. Use for "weekly check-in", "weekly review", "how did my week go", or at the end of a training week.
+description: Weekly check-in for the garmin-coach - pulls the week's training from Garmin and/or Hevy (plus recovery data if there is a watch), compares it to the block plan and the athlete's baselines, classifies progress (AHEAD to AT RISK) with facts separated from hypotheses, applies justified plan changes, and pushes next week's workouts to Garmin and/or Hevy. Use for "weekly check-in", "weekly review", "how did my week go", or at the end of a training week.
 ---
 
 # Weekly check-in
@@ -11,7 +11,22 @@ for the athlete's active goals.
 ## 1. Gather (never fabricate; report gaps)
 
 - `workspace_status` and `journal/context.md` (open questions from last time).
-- `garmin_sync_since()` (one call; defaults to everything since the last
+  `integrations` decides the data call(s) below: Garmin on, `garmin_sync_since`;
+  Hevy on, `hevy_sync_since`; both, Garmin first (the second merges the two
+  records of one session). Neither: skip the data pull and take everything
+  from the athlete (sessions done, loads, RPE, weight).
+- **Hevy** (`hevy: true`): `hevy_sync_since()` (one call; defaults to
+  everything since the last weekly check-in). It imports the week's workouts
+  (warm-ups excluded) and returns `proposed` (status and risk drafted from
+  adherence, goal trends and injuries only), `adherence` (a session counts as
+  done when started from its Hevy routine or logged on the planned day),
+  `sessions`, `effort_logging`, `body_weight_avg`, `goal_progress`,
+  `open_injuries`, and `block` with next week's sessions and whether each is
+  `in_hevy`. There is **no recovery data** unless a watch is also on: ask
+  about sleep, soreness, pain and stress, and cap your risk call at what
+  they tell you. If RPE isn't logged, ask for one number per session, or
+  suggest turning on RPE per set in Hevy.
+- **Garmin** (`garmin: true`): `garmin_sync_since()` (one call; defaults to everything since the last
   weekly check-in). It imports the week's activities (strength sets parsed),
   backfills recovery metrics and VO2max, and returns:
   - `proposed`: draft **status** and **risk** with the reasons behind them
@@ -70,12 +85,14 @@ first, priority order) and don't average.
 If the plan changes:
 1. edit the block yml (next week's prescription; add a `log` line)
 2. `log` to `plan_changes` (date, block_id, change, reason, decided_by)
-3. `push_week(week=<next week>)`: it rebuilds only the sessions that
-   changed, verifies them, and removes the superseded versions (run/ride
-   sessions still go through `coach-garmin-sync`)
+3. Push next week: `push_week(week=<next week>)` for Garmin (it rebuilds
+   only the sessions that changed, verifies them, and removes the superseded
+   versions; run/ride sessions still go through `coach-garmin-sync`),
+   `hevy_push_week(week=<next week>)` for Hevy (updates the session routines
+   in place and reads them back; see `coach-hevy-sync`)
 
 If nothing changes, still push next week if any `block.next_week` session
-has `on_garmin: false`.
+has `on_garmin: false` / `in_hevy: false`.
 
 Energy estimate (`nutrition.md`): with 2+ weeks of weight trend at a
 known, steady intake, recalibrate TDEE (stable weight means intake is about
@@ -98,12 +115,12 @@ the next block (it was PROJECTED), then `coach-review` before activating.
 
 ### <Primary goal> - e1RM/metric, trend, distance to next milestone, block week X/Y
 ### Training - adherence, volume/intensity, RPE accuracy, PRs
-### Recovery - HRV · RHR · sleep · Body Battery · stress vs baseline (each with flag)
+### Recovery - HRV · RHR · sleep · Body Battery · stress vs baseline (each with flag); without a watch, what they told you about sleep, soreness and stress
 ### <Secondary goals> - one line each (skills, maintenance lifts, mobility/core)
 ### Nutrition - weight trend, intake vs phase target
 ### Risks - Green/Yellow/Orange/Red items with what triggers escalation
 ### Changes for next week - what changed and why (or "none, progressing as planned")
-### Next week on Garmin - day: session (pushed ✓)
+### Next week on Garmin / in Hevy - day: session (pushed ✓)
 ```
 
 ## 5. Log

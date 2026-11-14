@@ -38,7 +38,8 @@ Orchestrator decides at the end.
 - **Data Analyst**: are the loads anchored to confirmed numbers? Are the
   exit criteria measurable? PROJECTED values marked as such?
 - **Plan Reviewer**: goal alignment, total fatigue, only listed equipment,
-  schedule fit, every exercise has a Garmin mapping.
+  schedule fit, every exercise has the mapping for each connected app
+  (Garmin key and/or Hevy template id).
 
 ## Process
 

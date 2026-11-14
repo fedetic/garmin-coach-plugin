@@ -48,8 +48,11 @@ CREATE TABLE IF NOT EXISTS workouts (
   id INTEGER PRIMARY KEY, garmin_activity_id TEXT UNIQUE, date TEXT, name TEXT,
   sport TEXT, duration_sec REAL, distance_m REAL, avg_hr REAL, max_hr REAL,
   calories REAL, rpe REAL, feel REAL, block_id TEXT, notes TEXT,
-  garmin_workout_id TEXT       -- the planned Garmin workout this session was started from
+  garmin_workout_id TEXT,      -- the planned Garmin workout this session was started from
+  hevy_workout_id TEXT,        -- Hevy athletes: the logged Hevy workout (unique, see index below)
+  hevy_routine_id TEXT         -- the Hevy routine it was started from
 );
+CREATE UNIQUE INDEX IF NOT EXISTS idx_workouts_hevy ON workouts(hevy_workout_id);
 
 CREATE TABLE IF NOT EXISTS workout_sets (
   id INTEGER PRIMARY KEY, workout_id INTEGER NOT NULL, set_order INTEGER,
@@ -100,4 +103,13 @@ CREATE TABLE IF NOT EXISTS garmin_workouts (
   week INTEGER, session TEXT, scheduled_date TEXT, status TEXT DEFAULT 'scheduled',
   payload_hash TEXT,           -- lets push_week reuse an unchanged template
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Hevy athletes: one routine per planned session, updated in place each week (Hevy has no calendar
+-- and no way to delete a routine through its API). payload_hash lets the push skip unchanged ones.
+CREATE TABLE IF NOT EXISTS hevy_routines (
+  id INTEGER PRIMARY KEY, hevy_routine_id TEXT NOT NULL, block_id TEXT, session TEXT,
+  week INTEGER, title TEXT, planned_date TEXT, payload_hash TEXT,
+  status TEXT DEFAULT 'active', updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(block_id, session)
 );

@@ -39,12 +39,15 @@ workspace (the folder with coach.yml).
 
 Before any coaching, load the `coach-core` skill, then the skill for the task: coach-daily
 (morning check), coach-weekly (weekly check-in), coach-plan, coach-review, coach-garmin-sync,
-coach-setup (no coach.yml yet).
+coach-hevy-sync, coach-setup (no coach.yml yet). Check `integrations` in workspace_status: the
+athlete may use Garmin, Hevy, both or neither.
 
 Prefer the coach server's one-call tools: garmin_history (setup), garmin_daily_snapshot (daily),
 garmin_sync_since (weekly), push_week (workouts to Garmin), validate_block (check a block yml),
-garmin_lookup (HR zones, nutrition, VO2max trend). They return drafts (proposed_call,
-proposed status/risk): confirm or override them with a reason.
+garmin_lookup (HR zones, nutrition, VO2max trend). For Hevy athletes: hevy_history (setup),
+hevy_sync_since (weekly), hevy_push_week (routines into Hevy), hevy_find_exercise; for anyone
+without Garmin data: daily_context (daily). They return drafts (proposed_call, proposed
+status/risk): confirm or override them with a reason.
 
 Never invent numbers: report missing data as missing. Keep daily answers short.
 """

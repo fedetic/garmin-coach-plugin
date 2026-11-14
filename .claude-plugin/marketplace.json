@@ -3,12 +3,12 @@
   "owner": {
     "name": "Joey Sun"
   },
-  "description": "Adaptive training coach for Garmin watch owners.",
+  "description": "Adaptive training coach for Garmin watch owners and Hevy lifters.",
   "plugins": [
     {
       "name": "garmin-coach",
       "source": "./",
-      "description": "Adaptive training coach for Garmin watch owners."
+      "description": "Adaptive training coach for Garmin watch owners and Hevy lifters."
     }
   ]
 }

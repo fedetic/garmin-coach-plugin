@@ -69,7 +69,8 @@ sessions:
     # test: true             # test/max day: stricter readiness rules (also inferred from "test"/"max"/"1RM" in the name)
     exercises:
       - exercise: barbell_bench_press
-        garmin: {category: BENCH_PRESS, exercise: BARBELL_BENCH_PRESS}
+        garmin: {category: BENCH_PRESS, exercise: BARBELL_BENCH_PRESS}   # Garmin athletes
+        hevy: {template_id: "05293BCA"}                                  # Hevy athletes (hevy_find_exercise)
         rest_sec: 240
         weeks:               # per-week prescription; omit `weeks` if constant
           1: {sets: 3, reps: 2, pct_1rm: 0.90, weight_kg: 90, rpe: 7}
@@ -122,6 +123,11 @@ Conventions:
   no target. A zone range like "Z1-Z2" is not a Garmin target: pick one zone
   or give bpm. Week overrides replace a part's fields (`{main: {...}}`) or
   one field (`main_duration_min`, `repeats`).
+- Which exercise keys a strength exercise needs depends on `integrations`:
+  `garmin: {category, exercise}` for Garmin, `hevy: {template_id}` for Hevy,
+  both when both are on, neither when neither is. A session's `reps` may be a
+  range string (`"8-12"`); Hevy shows it as a rep range. `rpe` and `note`
+  become the exercise note in Hevy routines (a Hevy set has no RPE target).
 - `weight_kg` is always the rounded, buildable load (`prescribe_load`), and
   `pct_1rm` keeps the reasoning.
 - Put actuals and changes in `log`, not as comments scattered through the file.

@@ -43,8 +43,12 @@ and their logs/reviews.
   `pct_1rm` and the rounded `weight_kg`. Endurance: zones/paces from the
   athlete's Garmin HR zones or LT data, written as a `structure` in the
   plan-format shape (one zone, a bpm range or a pace range per step) so
-  `push_week` can build it.
-- Each exercise gets a Garmin mapping (`find_garmin_exercise`) so syncing is
+  `push_week` can build it. Only Garmin takes run/ride/walk structures: for
+  an athlete without Garmin, keep those sessions in the block yml and
+  describe them in the check-in instead.
+- Each exercise gets the mapping for the apps the athlete uses
+  (`integrations`): Garmin (`find_garmin_exercise`) and/or Hevy
+  (`hevy_find_exercise`, write `hevy: {template_id}`), so syncing is
   mechanical.
 - Periodize effort inside the block: conservative week 1, building, then a
   deload or taper where the archetype calls for it.
@@ -70,7 +74,9 @@ and their logs/reviews.
    (a deliberate load jump, a longer test day).
 5. Run `coach-review` before the block goes active. Fix or log anything it
    flags.
-6. `coach-garmin-sync` to push the first week (or the current week).
+6. Push the first week (or the current week): `coach-garmin-sync` for
+   Garmin, `coach-hevy-sync` for Hevy, both when both are on. With neither,
+   give the week in the chat and keep it in the block yml.
 7. `log` to `plan_changes` for any revision of an existing plan, with the reason.
 
 ## Revising mid-block

@@ -13,7 +13,7 @@ from datetime import date, datetime, timedelta
 import yaml
 from mcp.server.fastmcp import FastMCP
 
-from . import calc, db, garmin, ops, readiness, workspace
+from . import calc, db, garmin, hevy, hevy_ops, ops, readiness, workspace
 
 mcp = FastMCP("coach")
 
@@ -24,6 +24,16 @@ def _root(path: str | None = None):
 
 def _con():
     return db.connect(_root())
+
+
+def _off(source: str) -> dict | None:
+    """An error to return when this athlete has switched `source` (garmin | hevy) off in coach.yml."""
+    if workspace.integrations(workspace.settings(_root()))[source]:
+        return None
+    other = "hevy" if source == "garmin" else "garmin"
+    return {"error": f"{source} is not turned on for this athlete (coach.yml integrations.{source}: false). "
+                     f"If they do use it, call set_integrations({source}=true) after confirming with them; "
+                     f"otherwise use the {other}/no-wearable tools."}
 
 
 # ---------------------------------------------------------------- workspace
@@ -52,6 +62,7 @@ def workspace_status(workspace_path: str = "") -> dict:
     return {
         "workspace": str(root),
         "settings": cfg,
+        "integrations": {**workspace.integrations(cfg), "hevy_key_found": hevy.configured()},
         "files": workspace.inventory(root),
         "active_block": one("SELECT id, name, file, start_date, end_date FROM training_blocks WHERE status='active'"),
         "goals": [dict(r) for r in con.execute(
@@ -74,12 +85,28 @@ def workspace_status(workspace_path: str = "") -> dict:
 
 @mcp.tool()
 def init_workspace(path: str, athlete_name: str = "", units: str = "kg", timezone: str = "",
-                   weekly_checkin_day: str = "Sunday") -> dict:
+                   weekly_checkin_day: str = "Sunday", garmin: bool | None = None,
+                   hevy: bool | None = None) -> dict:
     """Create a new athlete workspace from templates (never overwrites existing files)
-    and an empty database. Used by the coach-setup skill."""
-    root, created = workspace.init(path, athlete_name, units, timezone, weekly_checkin_day)
+    and an empty database. Used by the coach-setup skill. garmin / hevy: which data sources the
+    athlete uses (asked first thing in setup); leave unset for the default (Garmin on, Hevy off)."""
+    root, created = workspace.init(path, athlete_name, units, timezone, weekly_checkin_day, garmin, hevy)
     db.connect(root).close()
-    return {"workspace": str(root), "created": created + ["data/coach.db"]}
+    return {"workspace": str(root), "created": created + ["data/coach.db"],
+            "integrations": workspace.integrations(workspace.settings(root))}
+
+
+@mcp.tool()
+def set_integrations(garmin: bool | None = None, hevy: bool | None = None) -> dict:
+    """Turn a data source on or off for this athlete (coach.yml). Only after the athlete says so:
+    garmin = they have a Garmin watch and want recovery data and workouts on it; hevy = they log lifts
+    in the Hevy app (Hevy Pro) and want the plan written into it as routines. Leave an argument unset to
+    keep it. Returns the new settings and whether a Hevy key is already saved on this computer."""
+    now = workspace.set_integrations(_root(), garmin, hevy)
+    out = {"integrations": now, "hevy_key_found": hevy.configured()}
+    if now["hevy"] and not out["hevy_key_found"]:
+        out["next"] = hevy.AUTH_HINT
+    return out
 
 
 # ---------------------------------------------------------------- database
@@ -373,6 +400,8 @@ def garmin_daily_snapshot(date: str = "", backfill_days: int = 0) -> dict:
     yesterday's/today's activities, and returns today's planned session from the active block plus
     what is on the Garmin calendar. Compact output - no raw Garmin JSON.
     backfill_days: use 60 on first setup so baselines exist from day one (slow: ~3 Garmin calls/day)."""
+    if (off := _off("garmin")):
+        return off
     return ops.daily_snapshot(_root(), date, backfill_days)
 
 
@@ -386,6 +415,8 @@ def garmin_sync_since(start_date: str = "", end_date: str = "") -> dict:
     `proposed` drafts status (AHEAD..AT RISK) and risk (GREEN..ORANGE) from the data - confirm or
     override after asking the athlete what the data can't show.
     Defaults: start = last weekly check-in (or 7 days ago), end = today."""
+    if (off := _off("garmin")):
+        return off
     out = ops.sync_since(_root(), start_date, end_date)
     out["goal_progress"] = goal_progress()
     proposed = ops.propose_weekly(out, ops.readiness_on(_root(), out["range"][1]), out["goal_progress"])
@@ -403,6 +434,8 @@ def push_week(block_id: str = "", week: int = 0, dates: dict | None = None, dry_
     Defaults: active block, current week. dates: {session_id: YYYY-MM-DD} to move sessions.
     Run with dry_run=true first when unsure; past dates are skipped unless include_past.
     Edit the block yml BEFORE calling - the yml is the source of truth."""
+    if (off := _off("garmin")):
+        return off
     return ops.push_week(_root(), block_id, week, dates, dry_run, include_past)
 
 
@@ -413,6 +446,8 @@ def garmin_history(weeks: int = 12, backfill_days: int = 60) -> dict:
     summarized per sport (sessions/week, duration, usual days), strength top exercises with
     heaviest set and e1RM floor, effort-logging quality, `backfill_days` of recovery metrics stored
     with the resulting baselines, endurance context, body weight. Slow (~1-2 min): say so first."""
+    if (off := _off("garmin")):
+        return off
     return ops.history(_root(), weeks, backfill_days)
 
 
@@ -422,6 +457,8 @@ def garmin_lookup(topic: str, start_date: str = "", end_date: str = "") -> dict:
     - hr_zones: the athlete's saved HR zones in bpm per sport (for zone targets, easy-run caps)
     - nutrition: logged intake per day + averages over fully logged days (default last 14 days, max 61)
     - vo2max_trend: VO2max on the days Garmin recomputed it (default 12 weeks, max 90 days)"""
+    if (off := _off("garmin")):
+        return off
     return ops.lookup(_root(), topic, start_date, end_date)
 
 
@@ -433,6 +470,77 @@ def validate_block(block: str = "") -> dict:
     block: file name, block id, or empty for the active block. Fix every error, then call again;
     warnings are judgment calls - fix or explain them."""
     return ops.validate_block(_root(), block)
+
+
+# ---------------------------------------------------------------- Hevy and no-wearable tools
+
+@mcp.tool()
+def daily_context(date: str = "") -> dict:
+    """THE daily check for an athlete WITHOUT Garmin data: today's planned session from the active
+    block (this week's loads, readiness_gate, test_day), what they trained in the last 7 days
+    (refreshed from Hevy when it is on), open injuries, and any self-reported metrics against their own
+    baseline. There is no proposed GO/MODIFY/REST: ask about sleep, soreness, pain and stress, then
+    apply the decision table in the coach-daily skill."""
+    return hevy_ops.daily_context(_root(), date)
+
+
+@mcp.tool()
+def hevy_history(weeks: int = 12) -> dict:
+    """First-setup pull for an athlete who logs lifting in Hevy: the last `weeks` of workouts imported
+    (warm-ups excluded, exercises mapped to Garmin-style keys so goal metrics like
+    e1rm:BARBELL_BENCH_PRESS work), sessions per week and usual days, top exercises with heaviest set
+    and e1RM floor, RPE logging quality, body measurements. Everything Hevy can't know (age, sleep,
+    injuries) is listed in `not_in_hevy`. A minute or less."""
+    if (off := _off("hevy")):
+        return off
+    return hevy_ops.history(_root(), weeks)
+
+
+@mcp.tool()
+def hevy_sync_since(start_date: str = "", end_date: str = "") -> dict:
+    """THE weekly data pull for a Hevy athlete in one call: imports workouts since the last weekly
+    check-in, then returns adherence (planned sessions vs done, missed), per-session sets and loads,
+    RPE logging quality, body-weight change, goal progress, open injuries, and the block's next week
+    with whether each session is already `in_hevy`. `proposed` drafts status (AHEAD..AT RISK) and risk
+    from the data only - there is no recovery data, so confirm both after asking the athlete about sleep,
+    soreness, pain and life. With Garmin on as well, call garmin_sync_since FIRST, then this (it merges
+    the two records of the same session). Defaults: start = last weekly check-in (or 7 days ago), end = today."""
+    if (off := _off("hevy")):
+        return off
+    out = hevy_ops.sync_since(_root(), start_date, end_date)
+    out["goal_progress"] = goal_progress()
+    proposed = ops.propose_weekly(out, ops.readiness_on(_root(), out["range"][1]), out["goal_progress"])
+    proposed["not_checked"] = ("sleep, soreness, pain, illness, life stress (no wearable data), goals without an "
+                               "automatic series (skills, race times) - ask and adjust; RED risk comes only "
+                               "from reported red-flag symptoms")
+    return {"range": out.pop("range"), "proposed": proposed, **out}
+
+
+@mcp.tool()
+def hevy_push_week(block_id: str = "", week: int = 0, dates: dict | None = None, dry_run: bool = False,
+                   include_past: bool = False) -> dict:
+    """Write a block yml week into the athlete's Hevy app as routines, in one call. One routine per
+    strength session, in a "Coach" folder; the same routine is updated in place each week (Hevy has no
+    calendar, so the planned date is in the routine's notes). Each exercise needs `hevy: {template_id}`
+    in the yml (find it with hevy_find_exercise); an exact, unambiguous name match is used when absent,
+    otherwise the session is skipped and the candidates are listed. Reads the routine back and compares
+    every set; a mismatch is reported (Hevy's API cannot delete routines). Run sessions are skipped.
+    Edit the block yml BEFORE calling - the yml is the source of truth. dry_run=true to preview;
+    dates={session_id: YYYY-MM-DD} to move a session; past dates skipped unless include_past."""
+    if (off := _off("hevy")):
+        return off
+    return hevy_ops.push_week(_root(), block_id, week, dates, dry_run, include_past)
+
+
+@mcp.tool()
+def hevy_find_exercise(query: str, limit: int = 6, refresh: bool = False) -> list[dict]:
+    """Search the athlete's Hevy exercises (Hevy's library plus their custom ones) by name. Returns
+    id, title, muscle, equipment, custom, score. Use the id as `hevy: {template_id: <id>}` on a block
+    yml exercise. A score of 2 or more means the same words. refresh=true re-reads the library
+    (after the athlete created a custom exercise in Hevy)."""
+    if (off := _off("hevy")):
+        return [off]
+    return hevy.find_templates(query, limit, refresh)
 
 
 def main():
