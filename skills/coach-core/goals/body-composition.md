@@ -7,8 +7,10 @@ don't set deficit targets.
 ## Making it measurable
 
 - `body:weight_kg` from Garmin weigh-ins (a smart scale or manual
-  `add_weigh_in`). Compare weekly averages, never single days: water and
-  glycogen swing 1-2kg.
+  `add_weigh_in`), from Hevy body measurements (`hevy_sync_since` stores
+  them), or, with neither, what the athlete tells you each check-in
+  (`record_metrics` with `metric: weight_kg`, `source: "stated"`). Compare weekly averages, never
+  single days: water and glycogen swing 1-2kg.
 - `body:body_fat_pct` only as a trend, and only from the same device
   (scale BIA is noisy).
 - Waist measurement every 2-4 weeks as an observation.

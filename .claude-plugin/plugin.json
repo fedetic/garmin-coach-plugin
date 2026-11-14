@@ -2,13 +2,14 @@
   "name": "garmin-coach",
   "displayName": "Garmin Coach",
   "version": "0.2.0",
-  "description": "Adaptive training coach for Garmin watch owners: onboarding, long-term block planning, daily readiness and weekly check-ins against your own baselines, and structured workouts pushed to your Garmin calendar.",
+  "description": "Adaptive training coach for Garmin watch owners and Hevy lifters (or neither): onboarding, long-term block planning, daily readiness and weekly check-ins against your own baselines, and workouts pushed to your Garmin calendar and/or your Hevy app.",
   "author": {
     "name": "Joey Sun"
   },
   "license": "MIT",
   "keywords": [
     "garmin",
+    "hevy",
     "fitness",
     "coaching",
     "strength",

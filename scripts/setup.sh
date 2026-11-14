@@ -4,14 +4,22 @@
 #   curl -fsSL https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.sh | bash
 #   ... | bash -s -- --codex        # use OpenAI Codex instead of Claude Code
 #   ... | bash -s -- --opencode     # use opencode (e.g. with a local model)
+#   ... | bash -s -- --desktop      # Claude Desktop (Cowork): prepare this computer, add the plugin in the app
+#   ... | bash -s -- --no-garmin    # no Garmin watch: skip the Garmin login, don't ask
+#   ... | bash -s -- --hevy         # log lifts in Hevy: connect it, don't ask
 #
 # Safe to run again: every step checks first and skips what is already done.
 set -euo pipefail
 
 TOOL=claude
+GARMIN=ask      # ask | yes | no
+HEVY=ask
 for a in "$@"; do
   [ "$a" = "--codex" ] && TOOL=codex
   [ "$a" = "--opencode" ] && TOOL=opencode
+  [ "$a" = "--desktop" ] && TOOL=desktop
+  [ "$a" = "--no-garmin" ] && GARMIN=no
+  [ "$a" = "--hevy" ] && HEVY=yes
 done
 REPO="https://github.com/fedetic/garmin-coach-plugin.git"
 PLUGIN_DIR="$HOME/.garmin-coach/plugin"          # Codex and opencode
@@ -26,6 +34,14 @@ step() { printf '\n\033[1m[%s] %s\033[0m\n' "$1" "$2"; }
 ok()   { printf '  \033[32m✓\033[0m %s\n' "$1"; }
 die()  { printf '  \033[31m✗ %s\033[0m\n' "$1"; exit 1; }
 tty_in() { if [ -r /dev/tty ]; then "$@" </dev/tty; else "$@"; fi; }   # interactive even under curl | bash
+# yes/no question; $2 is the answer when there is no keyboard to ask (curl | bash in a script)
+ask() {
+  local a=""
+  if (exec </dev/tty) 2>/dev/null; then printf '  %s ' "$1" >/dev/tty; read -r a </dev/tty || a=""
+  else a="$2"; fi
+  a=${a:-$2}
+  case "$a" in [Yy]*) return 0 ;; *) return 1 ;; esac
+}
 
 step 1/6 "git"
 if command -v git >/dev/null; then ok "git found"
@@ -46,6 +62,10 @@ if [ "$TOOL" = claude ]; then
   if command -v claude >/dev/null; then ok "Claude Code found"
   else curl -fsSL https://claude.ai/install.sh | bash && ok "Claude Code installed"; fi
   command -v claude >/dev/null || die "claude not on PATH - open a new terminal and run this setup again."
+elif [ "$TOOL" = desktop ]; then
+  # the app itself is installed and signed in by the person; this script only prepares the computer
+  if [ -d /Applications/Claude.app ] || [ -d "$HOME/Applications/Claude.app" ]; then ok "Claude Desktop found"
+  else echo "  Claude Desktop not found in Applications. Download it from https://claude.ai/download (a paid Claude plan is needed for Cowork)."; fi
 elif [ "$TOOL" = codex ]; then
   command -v codex >/dev/null && ok "Codex found" || die \
     "Codex is not installed. Install it (https://developers.openai.com/codex/cli, e.g. npm install -g @openai/codex), then run this setup again with --codex."
@@ -71,20 +91,51 @@ if [ "$TOOL" = claude ]; then
 else
   if [ -d "$PLUGIN_DIR/.git" ]; then git -C "$PLUGIN_DIR" pull --quiet && ok "plugin updated"
   else git clone --quiet "$REPO" "$PLUGIN_DIR" && ok "plugin downloaded to $PLUGIN_DIR"; fi
-  uv run --quiet --frozen --project "$PLUGIN_DIR/server" coach-$TOOL install | sed 's/^/  /'
+  if [ "$TOOL" = desktop ]; then
+    uv sync --quiet --frozen --project "$PLUGIN_DIR/server" && ok "coach server ready (you add the plugin inside Claude Desktop, see below)"
+  else
+    uv run --quiet --frozen --project "$PLUGIN_DIR/server" coach-$TOOL install | sed 's/^/  /'
+  fi
 fi
 
-step 5/6 "Garmin Connect login"
-if ls "$HOME/.garminconnect/"*.json >/dev/null 2>&1; then ok "already logged in (tokens in ~/.garminconnect)"
+step 5/6 "Your data sources (Garmin watch, Hevy app)"
+if [ "$GARMIN" = ask ]; then ask "Do you have a Garmin watch that syncs to Garmin Connect? [Y/n]" y && GARMIN=yes || GARMIN=no; fi
+if [ "$GARMIN" = no ]; then ok "no Garmin: the coach will ask a few quick questions instead of reading recovery data"
+elif ls "$HOME/.garminconnect/"*.json >/dev/null 2>&1; then ok "Garmin: already logged in (tokens in ~/.garminconnect)"
 else
   echo "  Log in with your Garmin Connect email and password (and MFA code if you use one)."
   echo "  Your password is not stored, only a login token in ~/.garminconnect on this computer."
   tty_in uvx --python 3.12 --with "$GARMIN_MCP_WITH" --from "$GARMIN_MCP" garmin-mcp-auth
 fi
+if [ "$HEVY" = ask ]; then ask "Do you log your workouts in the Hevy app? (needs Hevy Pro) [y/N]" n && HEVY=yes || HEVY=no; fi
+if [ "$HEVY" = yes ]; then
+  if [ -s "$HOME/.hevy/api-key" ]; then ok "Hevy: key already saved (~/.hevy/api-key)"
+  else
+    echo "  Create an API key in Hevy: Settings > Developer (https://hevy.com/settings?developer)."
+    echo "  It is saved only on this computer, readable only by you. Nothing shows as you type."
+    if [ "$TOOL" = claude ]; then HEVY_SERVER=$(ls -dt "$HOME"/.claude/plugins/cache/garmin-coach/garmin-coach/*/server 2>/dev/null | head -1 || true)
+    else HEVY_SERVER="$PLUGIN_DIR/server"; fi
+    if [ -n "${HEVY_SERVER:-}" ]; then tty_in uv run --quiet --frozen --project "$HEVY_SERVER" coach-hevy-auth
+    else tty_in uvx --from "git+https://github.com/fedetic/garmin-coach-plugin#subdirectory=server" coach-hevy-auth; fi \
+      || echo "  Hevy key not saved. Run this step again later; the coach will tell you how."
+  fi
+fi
 
 step 6/6 "Your coaching folder"
 mkdir -p "$WORKSPACE" && ok "$WORKSPACE (your data lives here, not in the plugin)"
 
+if [ "$TOOL" = desktop ]; then
+cat <<EOF
+
+This computer is ready. Two things left, in Claude Desktop:
+
+  1. Cowork > Plugins > Add marketplace > enter:  fedetic/garmin-coach-plugin
+     then install "garmin-coach".
+  2. Start a Cowork task, choose the folder ~/coach, and type:  set me up as a new athlete
+
+Full walkthrough: docs/claude-desktop-hevy.md in the repository.
+EOF
+else
 cat <<EOF
 
 All set. Start coaching:
@@ -94,5 +145,6 @@ All set. Start coaching:
 
 Then type:   set me up as a new athlete
 EOF
+fi
 if [ "$TOOL" = claude ]; then echo "(First time? Claude Code asks you to log in - a Claude Pro or Max plan is needed.)"; fi
 if [ "$TOOL" = opencode ]; then echo "(In opencode, press Tab to switch to the 'coach' agent. Local model? See 'Local models' in the README.)"; fi

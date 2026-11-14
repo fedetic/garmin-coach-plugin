@@ -3,13 +3,18 @@
 #   irm https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.ps1 | iex
 #   $env:COACH_TOOL="codex"; irm https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.ps1 | iex
 #   $env:COACH_TOOL="opencode"; irm ... | iex   # opencode (e.g. with a local model)
+#   $env:COACH_TOOL="desktop"; irm ... | iex    # Claude Desktop (Cowork): prepare this computer, add the plugin in the app
+#   $env:COACH_GARMIN="no"; irm ... | iex       # no Garmin watch: skip the Garmin login, don't ask
+#   $env:COACH_HEVY="yes"; irm ... | iex        # log lifts in Hevy: connect it, don't ask
 #
 # Safe to run again: every step checks first and skips what is already done.
 # Continue, not Stop: Windows PowerShell 5.1 turns any stderr output of a native
 # command into a terminating error under Stop. Failures are checked explicitly.
 $ErrorActionPreference = "Continue"
 
-$Tool = if ($env:COACH_TOOL -in @("codex", "opencode")) { $env:COACH_TOOL } else { "claude" }
+$Tool = if ($env:COACH_TOOL -in @("codex", "opencode", "desktop")) { $env:COACH_TOOL } else { "claude" }
+$Garmin = if ($env:COACH_GARMIN -in @("yes", "no")) { $env:COACH_GARMIN } else { "ask" }
+$Hevy = if ($env:COACH_HEVY -in @("yes", "no")) { $env:COACH_HEVY } else { "ask" }
 $Repo = "https://github.com/fedetic/garmin-coach-plugin.git"
 $PluginDir = Join-Path $HOME ".garmin-coach\plugin"     # Codex and opencode
 $Workspace = Join-Path $HOME "coach"
@@ -126,6 +131,10 @@ if ($Tool -eq "claude") {
     Refresh-Path
     if (Has claude) { Ok "Claude Code installed" } else { Fail "claude not on PATH - open a new PowerShell and run setup again." }
   }
+} elseif ($Tool -eq "desktop") {
+  # the app itself is installed and signed in by the person; this script only prepares the computer
+  Write-Host "  Claude Desktop is installed from https://claude.ai/download (a paid Claude plan is needed for Cowork)."
+  Ok "nothing to install here for Claude Desktop"
 } else {
   $Pkg = if ($Tool -eq "codex") { "@openai/codex" } else { "opencode-ai" }
   if (Has $Tool) { Ok "$Tool found" }
@@ -182,17 +191,44 @@ if ($Tool -eq "claude") {
     if ($LASTEXITCODE -ne 0) { Fail "could not download the plugin from $Repo" }
     Ok "plugin downloaded to $PluginDir"
   }
-  uv run --quiet --frozen --project (Join-Path $PluginDir "server") "coach-$Tool" install
-  if ($LASTEXITCODE -ne 0) { Fail "$Tool registration failed (see message above)" }
+  if ($Tool -eq "desktop") {
+    uv sync --quiet --frozen --project (Join-Path $PluginDir "server")
+    if ($LASTEXITCODE -eq 0) { Ok "coach server ready (you add the plugin inside Claude Desktop, see below)" }
+  } else {
+    uv run --quiet --frozen --project (Join-Path $PluginDir "server") "coach-$Tool" install
+    if ($LASTEXITCODE -ne 0) { Fail "$Tool registration failed (see message above)" }
+  }
 }
 
-Step "5/6" "Garmin Connect login"
-if (Get-ChildItem (Join-Path $HOME ".garminconnect\*.json") -ErrorAction SilentlyContinue) {
-  Ok "already logged in (tokens in $HOME\.garminconnect)"
+Step "5/6" "Your data sources (Garmin watch, Hevy app)"
+if ($Garmin -eq "ask") { $Garmin = if (Ask "Do you have a Garmin watch that syncs to Garmin Connect?") { "yes" } else { "no" } }
+if ($Garmin -eq "no") {
+  Ok "no Garmin: the coach will ask a few quick questions instead of reading recovery data"
+} elseif (Get-ChildItem (Join-Path $HOME ".garminconnect\*.json") -ErrorAction SilentlyContinue) {
+  Ok "Garmin: already logged in (tokens in $HOME\.garminconnect)"
 } else {
   Write-Host "  Log in with your Garmin Connect email and password (and MFA code if you use one)."
   Write-Host "  Your password is not stored, only a login token in .garminconnect on this computer."
   uvx --python 3.12 --from $GarminMcp garmin-mcp-auth
+}
+if ($Hevy -eq "ask") {
+  $a = (Read-Host "  Do you log your workouts in the Hevy app? (needs Hevy Pro) [y/N]").Trim()
+  $Hevy = if ($a -match "^(y|yes)$") { "yes" } else { "no" }
+}
+if ($Hevy -eq "yes") {
+  if ((Test-Path (Join-Path $HOME ".hevy\api-key")) -and (Get-Item (Join-Path $HOME ".hevy\api-key")).Length -gt 0) {
+    Ok "Hevy: key already saved ($HOME\.hevy\api-key)"
+  } else {
+    Write-Host "  Create an API key in Hevy: Settings > Developer (https://hevy.com/settings?developer)."
+    Write-Host "  It is saved only on this computer. Nothing shows as you type."
+    $HevyServer = if ($Tool -eq "claude") {
+      Get-ChildItem (Join-Path $HOME ".claude\plugins\cache\garmin-coach\garmin-coach\*\server") -Directory -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime | Select-Object -Last 1 -ExpandProperty FullName
+    } else { Join-Path $PluginDir "server" }
+    if ($HevyServer) { uv run --quiet --frozen --project $HevyServer coach-hevy-auth }
+    else { uvx --from "git+https://github.com/fedetic/garmin-coach-plugin#subdirectory=server" coach-hevy-auth }
+    if ($LASTEXITCODE -ne 0) { Write-Host "  Hevy key not saved. Run this step again later; the coach will tell you how." }
+  }
 }
 
 Step "6/6" "Your coaching folder"
@@ -200,11 +236,21 @@ New-Item -ItemType Directory -Force -Path $Workspace | Out-Null
 Ok "$Workspace (your data lives here, not in the plugin)"
 
 Write-Host ""
-Write-Host "All set. Start coaching:" -ForegroundColor Green
-Write-Host ""
-Write-Host "    cd ~\coach"
-Write-Host "    $Launch"
-Write-Host ""
-Write-Host "Then type:   set me up as a new athlete"
+if ($Tool -eq "desktop") {
+  Write-Host "This computer is ready. Two things left, in Claude Desktop:" -ForegroundColor Green
+  Write-Host ""
+  Write-Host "  1. Cowork > Plugins > Add marketplace > enter:  fedetic/garmin-coach-plugin"
+  Write-Host "     then install 'garmin-coach'."
+  Write-Host "  2. Start a Cowork task, choose the folder ~\coach, and type:  set me up as a new athlete"
+  Write-Host ""
+  Write-Host "Full walkthrough: docs/claude-desktop-hevy.md in the repository."
+} else {
+  Write-Host "All set. Start coaching:" -ForegroundColor Green
+  Write-Host ""
+  Write-Host "    cd ~\coach"
+  Write-Host "    $Launch"
+  Write-Host ""
+  Write-Host "Then type:   set me up as a new athlete"
+}
 if ($Tool -eq "claude") { Write-Host "(First time? Claude Code asks you to log in - a Claude Pro or Max plan is needed.)" }
 if ($Tool -eq "opencode") { Write-Host "(In opencode, press Tab to switch to the 'coach' agent. Local model? See 'Local models' in the README.)" }

@@ -5,4 +5,7 @@ timezone: ""
 weekly_checkin_day: Sunday
 daily_checkin: true       # morning readiness check before training days
 git_sync: false          # true = pull at session start, commit+push at session end (private repo!)
+integrations:            # where workouts and data live; set at setup, change with set_integrations
+  garmin: true           # Garmin watch + Garmin Connect (recovery data, workouts on the watch)
+  hevy: false            # Hevy app (logs lifts; the coach writes routines into it). Needs Hevy Pro
 plugin_schema_version: 1

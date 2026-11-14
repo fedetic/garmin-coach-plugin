@@ -16,6 +16,7 @@ coach-mcp = "coach_mcp.server:main"
 coach-session = "coach_mcp.session:main"
 coach-codex = "coach_mcp.codex:main"
 coach-opencode = "coach_mcp.opencode:main"
+coach-hevy-auth = "coach_mcp.hevy:auth_main"
 
 [dependency-groups]
 dev = ["pytest>=8"]

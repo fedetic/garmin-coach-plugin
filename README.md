@@ -1,20 +1,26 @@
 # garmin-coach
 
-An adaptive training coach for Garmin watch owners that runs inside your own
-AI assistant (Claude Code, OpenAI Codex, or opencode with a local model) on
-your own subscription or hardware. It
-creates your workouts and syncs them to your Garmin watch automatically.
+An adaptive training coach that runs inside your own AI assistant (Claude
+Code, Claude Desktop, OpenAI Codex, or opencode with a local model) on your own
+subscription or hardware. It creates your workouts and puts them where you
+train: on your **Garmin** watch, in your **Hevy** app, or, with neither, in the
+chat. Setup starts by asking which of those you use.
 
-- **Onboarding**: reads your Garmin history first (activities, lifts, VO2max,
-  HRV/sleep baselines), then asks about goals, injuries, schedule, equipment
-  and food, one topic at a time.
+> **Using Claude Desktop, Hevy, or an Apple Watch?** See the
+> [Claude Desktop + Hevy guide](docs/claude-desktop-hevy.md): no Garmin needed.
+
+- **Onboarding**: asks which apps you use (Garmin? Hevy?), reads their history
+  first (Garmin: activities, lifts, VO2max, HRV/sleep baselines; Hevy: your
+  logged lifts), then asks about goals, injuries, schedule, equipment and
+  food, one topic at a time.
 - **Long-term plan**: measurable goals, a milestone ladder, and training
   blocks (base, build, peak, test, deload) detailed only when they're close.
-- **Daily check**: last night's recovery vs *your own* 60-day baseline, factor
-  by factor, then GO / MODIFY / REST for today's session.
+- **Daily check**: with a Garmin watch, last night's recovery vs *your own*
+  60-day baseline, factor by factor; without one, a few quick questions
+  (sleep, soreness, pain). Then GO / MODIFY / REST for today's session.
 - **Weekly check-in**: adherence, performance, recovery and progress
   toward goals, plan changes when the evidence supports them, and next week
-  pushed to your Garmin calendar.
+  pushed to your Garmin calendar and/or your Hevy routines.
 - **Specialist review**: every block is checked by programming, recovery,
   injury-risk, nutrition, data and goal-specific roles before it starts.
 - **Goal modules**: strength (1RM), hypertrophy, endurance (VO2max, race
@@ -28,14 +34,19 @@ no athlete data. What does leave your computer, and to whom, is spelled out in
 
 > Not medical advice. The Garmin connection uses the unofficial Garmin Connect
 > API ([Taxuspt/garmin_mcp](https://github.com/Taxuspt/garmin_mcp)); it can
-> break when Garmin changes things.
+> break when Garmin changes things. The Hevy connection uses Hevy's official
+> public API (Hevy Pro), which Hevy says may change.
 
 ## What you need
 
-- A Garmin watch synced to a **Garmin Connect** account
-- A **Claude Pro or Max** plan (for Claude Code), a ChatGPT plan that
-  includes **Codex**, *or* [opencode](https://opencode.ai) with any provider,
-  including a local model on your own GPU (see [Local models](#local-models-opencode))
+- Optional, any of: a Garmin watch synced to a **Garmin Connect** account
+  (recovery data and workouts on the watch); the **Hevy** app with **Hevy Pro**
+  (your lifts are read, your plan is written into it as routines); or neither
+  (the coach works from conversation). Apple Watch, Whoop and Oura aren't
+  connected yet: the coach asks about sleep and soreness instead
+- A **Claude Pro or Max** plan (for Claude Code or Claude Desktop), a ChatGPT
+  plan that includes **Codex**, *or* [opencode](https://opencode.ai) with any
+  provider, including a local model on your own GPU (see [Local models](#local-models-opencode))
 - A Mac, Windows 10/11 or Linux computer
 
 Everything else (git, uv, Python, Claude Code) is installed by the setup command.
@@ -59,6 +70,24 @@ Windows (PowerShell):
 ```powershell
 irm https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.ps1 | iex
 ```
+
+<details>
+<summary>Using Claude Desktop (Cowork), Hevy, or no Garmin?</summary>
+
+The setup asks "Do you have a Garmin watch?" and then "Do you log your workouts
+in Hevy?", and only does the logins you need. To skip the questions:
+`--no-garmin` and `--hevy` (Windows: `$env:COACH_GARMIN="no"`,
+`$env:COACH_HEVY="yes"`).
+
+For Claude Desktop, add `--desktop` (Windows: `$env:COACH_TOOL="desktop"`). It
+prepares your computer, and you add the plugin inside the app. Full walkthrough:
+[docs/claude-desktop-hevy.md](docs/claude-desktop-hevy.md).
+
+```sh
+# Mac / Linux
+curl -fsSL https://raw.githubusercontent.com/fedetic/garmin-coach-plugin/main/scripts/setup.sh | bash -s -- --desktop
+```
+</details>
 
 <details>
 <summary>Using Codex instead of Claude Code?</summary>
@@ -99,7 +128,7 @@ it's safe to run again if something fails halfway:
 2. **uv**: runs the coach and Garmin servers, and installs Python by itself
 3. **Claude Code** (or checks that Codex or opencode is there; on Windows it offers to install them, plus Node.js, and asks before allowing PowerShell to run them)
 4. **The garmin-coach plugin**
-5. **Garmin Connect login**: your email, password and MFA code if you use one. Only a login token is saved, in `~/.garminconnect` on your computer, and it lasts about 6 months.
+5. **Your data sources**: asks whether you have a Garmin watch (then the Garmin Connect login: your email, password and MFA code if you use one; only a login token is saved, in `~/.garminconnect` on your computer, and it lasts about 6 months) and whether you log in Hevy (then your Hevy API key, saved in `~/.hevy/api-key`)
 6. **Your coaching folder**: `~/coach`
 
 **3. Start coaching**
@@ -181,13 +210,21 @@ plugin into `~/.config/opencode/`. Remove with `... coach-opencode uninstall`.
 </details>
 
 <details>
-<summary><b>5. Garmin login</b></summary>
+<summary><b>5. Garmin login</b> (skip without a Garmin watch)</summary>
 
 All systems:
 ```sh
 uvx --python 3.12 --with "cryptography<49; sys_platform == 'darwin' and platform_machine == 'x86_64'" --from git+https://github.com/Taxuspt/garmin_mcp@202913fde53c9d15890d661fc9748dc6d0d5af52 garmin-mcp-auth
 ```
 Run it again whenever the coach says the Garmin login has expired.
+
+**Hevy** (skip if you don't use it): create an API key in the Hevy web app
+(Settings, Developer; Hevy Pro), then run, in any terminal:
+```sh
+uvx --from "git+https://github.com/fedetic/garmin-coach-plugin#subdirectory=server" coach-hevy-auth
+```
+It asks for the key without showing it and saves it owner-only in
+`~/.hevy/api-key`. (`HEVY_API_KEY` in the environment also works.)
 </details>
 
 <details>
@@ -218,11 +255,15 @@ can also call them directly):
 | "plan my next block" | build or revise the plan | `/garmin-coach:coach-plan` | `$coach-plan` |
 | "review this block" | specialist sign-off | `/garmin-coach:coach-review` | `$coach-review` |
 | "push this week to Garmin" | create and schedule workouts | `/garmin-coach:coach-garmin-sync` | `$coach-garmin-sync` |
+| "update my Hevy routines" | write the week into Hevy | `/garmin-coach:coach-hevy-sync` | `$coach-hevy-sync` |
 
 In opencode, switch to the `coach` agent (Tab) and just say it; the agent
 loads the right skill.
 
 ### A typical week
+
+(Shown for Garmin. With Hevy the plan lands in your Hevy routines instead of
+on a watch calendar; see the [Hevy guide](docs/claude-desktop-hevy.md#a-typical-week).)
 
 ```mermaid
 flowchart LR
@@ -327,7 +368,8 @@ only with a large context or a hosted model.
 
 ## Security and privacy
 
-Short version: the plugin itself sends your data nowhere except Garmin.
+Short version: the plugin itself sends your data nowhere except Garmin and
+Hevy, and only the ones you turn on.
 But the AI model you pick reads your health data, and the Garmin connection
 is unofficial third-party code that holds a full-access login token. Decide
 with that in mind.
@@ -339,6 +381,7 @@ with that in mind.
 | Your coaching folder (`~/coach`) | everything: goals, injuries, plans, daily recovery metrics, workouts, notes | stays on your computer, unless you turn on git sync (then also your git remote) |
 | Coach server (this repo) | reads and writes your folder and your Garmin account | talks only to Garmin Connect (and git, if sync is on). No telemetry, no server of ours |
 | Garmin login token (`~/.garminconnect`) | full read/write access to your Garmin Connect account | stays on your computer, readable only by your user |
+| Hevy API key (`~/.hevy/api-key`) | read/write access to your Hevy account (workouts, routines, body measurements) | stays on your computer, readable only by your user; sent only to `api.hevyapp.com` |
 | The AI model | whatever the coach reads during a conversation: recovery metrics, weight, injuries, training history, your answers | **hosted model:** sent to that provider. **Local model:** stays on your computer |
 
 ### This repo
@@ -348,8 +391,14 @@ with that in mind.
   with `--frozen`, so an update upstream can't slip new code in.
 - The only network traffic is to Garmin Connect, through
   [python-garminconnect](https://github.com/cyberjunky/python-garminconnect)
-  (pinned to 0.3.2), plus `git pull`/`push` of your coaching folder if you
-  turn on git sync.
+  (pinned to 0.3.2), and to Hevy's official API (`api.hevyapp.com`, standard
+  library only, no third-party code between the coach and your key), plus
+  `git pull`/`push` of your coaching folder if you turn on git sync. Each only
+  if you use that service (`integrations` in `coach.yml`).
+- Hevy writes are narrow: the coach creates and updates only its own routines
+  (one per planned session, in a "Coach" folder; their ids are tracked in its
+  database), reads each back and compares it with the plan. It never touches
+  your logged workouts, and Hevy's API can't delete anything it wrote.
 - Garmin writes are narrow: the coach creates, schedules, replaces and
   deletes only workouts it created itself (tracked in its database), checks
   each upload against the plan, and removes it again if Garmin stored
@@ -425,7 +474,10 @@ stores that data too.
 | Update | `claude plugin update garmin-coach@garmin-coach` (or re-run the setup command) | re-run the setup command, or `git -C ~/.garmin-coach/plugin pull` | same as Codex |
 | Remove | `claude plugin uninstall garmin-coach@garmin-coach` | `uv run --project ~/.garmin-coach/plugin/server coach-codex uninstall` | `... coach-opencode uninstall` |
 
-Removing the plugin never touches your `~/coach` folder.
+Removing the plugin never touches your `~/coach` folder. To disconnect a
+service, delete its login: both `~/.garminconnect*` files for Garmin,
+`~/.hevy/api-key` for Hevy (and revoke the key in Hevy's Developer settings).
+Claude Desktop: remove the plugin under Cowork > Plugins.
 
 ## How it's built (and why it ports 1:1)
 
@@ -433,9 +485,10 @@ Removing the plugin never touches your `~/coach` folder.
 garmin-coach-plugin/
 ├── skills/                  # Agent Skills standard (SKILL.md), read by Claude Code, Codex and opencode
 │   ├── coach-core/          # operating manual + references/ + goals/ (loaded by every other skill)
-│   ├── coach-setup/ coach-daily/ coach-weekly/ coach-plan/ coach-review/ coach-garmin-sync/
+│   ├── coach-setup/ coach-daily/ coach-weekly/ coach-plan/ coach-review/ coach-garmin-sync/ coach-hevy-sync/
 ├── server/                  # coach MCP server (Python): the deterministic half
 │   └── coach_mcp/           #   server.py (tools), ops.py + garmin_live.py (one-call Garmin tools),
+│                            #   hevy.py + hevy_ops.py (Hevy: API client, one-call tools, no wearable needed),
 │                            #   session.py (hooks), codex.py / opencode.py (installers)
 ├── hooks/hooks.json         # session start/end: status line + optional git sync
 ├── scripts/setup.sh, setup.ps1   # one-command setup
@@ -461,13 +514,16 @@ Coach MCP tools: `workspace_status` · `init_workspace` · `query` · `log` ·
 `update_record` · `upsert_training_block` · `record_metrics` ·
 `readiness_report` · `estimate_1rm` · `prescribe_load` · `round_load` ·
 `find_garmin_exercise` · `build_strength_workout` · `register_garmin_workout`
-· `import_activity` · `training_summary` · `goal_progress`
+· `import_activity` · `training_summary` · `goal_progress` · `set_integrations`
+· Garmin: `garmin_history` · `garmin_daily_snapshot` · `garmin_sync_since` · `push_week` · `garmin_lookup`
+· Hevy / no wearable: `hevy_history` · `hevy_sync_since` · `hevy_push_week` · `hevy_find_exercise` · `daily_context`
+· `validate_block`
 
 Workspace layout:
 
 ```
 ~/coach/
-├── coach.yml                # settings (units, check-in day, git_sync)
+├── coach.yml                # settings (units, check-in day, git_sync, integrations: garmin / hevy)
 ├── AGENTS.md, CLAUDE.md     # always-loaded pointer + your standing rules
 ├── athlete/                 # profile.md, equipment.yml, schedule.yml, nutrition.md
 ├── plan/                    # roadmap.yml, blocks/block-NN-*.yml

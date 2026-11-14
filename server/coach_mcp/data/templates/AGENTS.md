@@ -15,6 +15,11 @@ path. Use the workflow skills for the matching request:
 | build or revise the roadmap / a block | `coach-plan` |
 | review a block before it starts | `coach-review` |
 | push/fix workouts on the Garmin calendar | `coach-garmin-sync` |
+| push/fix routines in the Hevy app | `coach-hevy-sync` |
+
+Which of Garmin and Hevy this athlete uses is `integrations` in `coach.yml`
+(returned by `workspace_status`). A source that is off has no tools to call;
+without a wearable the daily check asks questions instead of reading data.
 
 ## Athlete-specific standing rules
 
